@@ -67,7 +67,7 @@ export default function RapportHebdo() {
       const { pdf } = await import('@react-pdf/renderer')
       const { RapportPDF } = await import('./RapportPDF')
       const blob = await pdf(
-        // @ts-expect-error JSX element passed to pdf()
+        // @ts-ignore JSX element passed to pdf()
         <RapportPDF chantier={chantier} semaine={semaine} stats={stats} />
       ).toBlob()
       const url = URL.createObjectURL(blob)

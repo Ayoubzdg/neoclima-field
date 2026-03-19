@@ -20,7 +20,9 @@ export default function NcDetail() {
 
   useEffect(() => {
     if (!id) return
-    supabase.from('non_conformites').select('*, photos(*), equipe:equipes(*)').eq('id', id).single()
+    Promise.resolve(
+      supabase.from('non_conformites').select('*, photos(*), equipe:equipes(*)').eq('id', id).single()
+    )
       .then(({ data }) => setNc(data as NonConformite | null))
       .finally(() => setIsLoading(false))
   }, [id])
