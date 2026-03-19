@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neoclima Field Tracker V2 — Aperçu</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        'nc-red': '#C0392B',
+        'nc-blue': '#2C3E50'
+      },
+      borderWidth: { '3': '3px' }
+    }
+  }
+}
+</script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .screen { display: none; }
+  .screen.active { display: flex; }
+  .task-card {
+    background: white; border-radius: 16px; padding: 14px;
+    border: 1.5px solid #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    transition: all .15s;
+  }
+  .task-card:hover { border-color: #2C3E50; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+  .btn-primary {
+    background: #C0392B; color: white; border-radius: 12px;
+    padding: 11px 18px; font-weight: 600; font-size: 14px;
+    border: none; cursor: pointer; transition: all .15s;
+  }
+  .btn-primary:hover { background: #a93226; }
+  .btn-secondary {
+    background: #f3f4f6; color: #2C3E50; border-radius: 12px;
+    padding: 9px 14px; font-weight: 600; font-size: 13px;
+    border: none; cursor: pointer; transition: all .15s;
+  }
+  .btn-secondary:hover { background: #e5e7eb; }
+  .nav-item { cursor: pointer; transition: color .15s; }
+  .nav-item.active { color: #C0392B; }
+  .nav-item:not(.active) { color: #9ca3af; }
+  .sidebar-item { border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 10px; font-size: 14px; color: #4b5563; }
+  .sidebar-item:hover { background: #f3f4f6; }
+  .sidebar-item.active { background: #fef2f2; color: #C0392B; font-weight: 600; }
+  .badge { padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  .pin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #d1d5db; transition: all .2s; }
+  .pin-dot.filled { background: #C0392B; border-color: #C0392B; transform: scale(1.15); }
+  .ppc-bar { transition: height .5s ease; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  .animate-pulse { animation: pulse 2s infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .animate-spin { animation: spin 1s linear infinite; }
+  .tag { padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; border: 1.5px solid; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- NAV TOP (visible sauf login) -->
+<div id="topbar" class="hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-100 px-4 h-14 items-center justify-between">
+  <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-gray-100">
+    <svg width="20" height="20" fill="none" stroke="#2C3E50" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="17" y2="6"/><line x1="3" y1="12" x2="17" y2="12"/><line x1="3" y1="18" x2="17" y2="18"/></svg>
+  </button>
+  <div class="flex items-center gap-2">
+    <div class="w-7 h-7 bg-nc-red rounded-lg flex items-center justify-center">
+      <svg width="14" height="14" fill="white" viewBox="0 0 24 24"><path d="M9 22V12h6v10M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+    </div>
+    <span id="topbar-title" class="font-bold text-nc-blue text-sm">Production</span>
+  </div>
+  <div class="flex items-center gap-2">
+    <span id="offline-badge" class="hidden bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">Hors ligne</span>
+    <div class="w-8 h-8 bg-nc-blue rounded-full flex items-center justify-center text-white text-xs font-bold">JP</div>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<div id="sidebar-overlay" class="hidden fixed inset-0 z-50 bg-black/40" onclick="toggleSidebar()"></div>
+<div id="sidebar" class="hidden fixed left-0 top-0 bottom-0 z-50 w-64 bg-white shadow-xl flex flex-col">
+  <div class="p-5 bg-nc-blue">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-nc-red rounded-xl flex items-center justify-center">
+        <svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M9 22V12h6v10M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      </div>
+      <div>
+        <p class="text-white font-bold text-sm">Neoclima</p>
+        <p class="text-white/60 text-xs">Field Tracker V2</p>
+      </div>
+    </div>
+    <div class="mt-4 bg-white/10 rounded-xl p-3">
+      <p class="text-white text-sm font-semibold">Jean-Pierre Martin</p>
+      <p class="text-white/60 text-xs">Monteur · Rolex Learning Center</p>
+    </div>
+  </div>
+  <nav class="flex-1 p-3 overflow-y-auto space-y-1">
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider px-3 py-2">Production</p>
+    <div class="sidebar-item active" onclick="showScreen('production'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      Mes tâches
+    </div>
+    <div class="sidebar-item" onclick="showScreen('chef'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard chef
+    </div>
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider px-3 py-2 mt-2">Planning</p>
+    <div class="sidebar-item" onclick="showScreen('gantt'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Gantt chantier
+    </div>
+    <div class="sidebar-item" onclick="showScreen('ppc'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      PPC
+    </div>
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider px-3 py-2 mt-2">Plans</p>
+    <div class="sidebar-item" onclick="showScreen('plans'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Plans & Zones
+    </div>
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider px-3 py-2 mt-2">Qualité</p>
+    <div class="sidebar-item" onclick="showScreen('qualite'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Non-conformités
+    </div>
+    <div class="sidebar-item" onclick="showScreen('mesures'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Mesures qualité
+    </div>
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider px-3 py-2 mt-2">Équipes</p>
+    <div class="sidebar-item" onclick="showScreen('equipes'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      Équipes & Effectifs
+    </div>
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider px-3 py-2 mt-2">Reporting</p>
+    <div class="sidebar-item" onclick="showScreen('reporting'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Rapport hebdo
+    </div>
+    <div class="sidebar-item" onclick="showScreen('financier'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Tableau financier
+    </div>
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider px-3 py-2 mt-2">Paramètres</p>
+    <div class="sidebar-item" onclick="showScreen('param-equipes'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M1 12h2M21 12h2M12 1v2M12 21v2"/></svg>
+      Gestion équipes
+    </div>
+    <div class="sidebar-item" onclick="showScreen('param-tasktypes'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
+      Types de tâches
+    </div>
+  </nav>
+  <div class="p-3 border-t border-gray-100">
+    <div class="sidebar-item text-red-500" onclick="showScreen('login'); document.getElementById('topbar').classList.add('hidden'); document.getElementById('bottomnav').classList.add('hidden'); toggleSidebar()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Déconnexion
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div id="bottomnav" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 px-2 safe-bottom">
+  <div class="flex justify-around py-2">
+    <button class="nav-item active flex flex-col items-center gap-0.5 px-4 py-1" onclick="showScreen('production')">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      <span class="text-xs font-medium">Tâches</span>
+    </button>
+    <button class="nav-item flex flex-col items-center gap-0.5 px-4 py-1" onclick="showScreen('ppc')">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span class="text-xs font-medium">PPC</span>
+    </button>
+    <button class="nav-item flex flex-col items-center gap-0.5 px-4 py-1" onclick="showScreen('qualite')">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span class="text-xs font-medium">Qualité</span>
+    </button>
+    <button class="nav-item flex flex-col items-center gap-0.5 px-4 py-1" onclick="showScreen('plans')">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span class="text-xs font-medium">Plans</span>
+    </button>
+  </div>
+</div>
+
+<!-- ===================== SCREENS ===================== -->
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen active min-h-screen bg-nc-blue flex flex-col items-center justify-center p-6">
+  <div class="mb-8 text-center">
+    <div class="w-16 h-16 bg-nc-red rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+      <svg width="32" height="32" fill="white" viewBox="0 0 24 24"><path d="M9 22V12h6v10M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+    </div>
+    <h1 class="text-white text-2xl font-bold tracking-tight">Neoclima</h1>
+    <p class="text-white/60 text-sm mt-1">Field Tracker V2</p>
+  </div>
+
+  <div class="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden">
+    <!-- STEP 1: Chantier -->
+    <div id="login-step1" class="p-6">
+      <h2 class="text-nc-blue font-bold text-lg mb-4">Choisir le chantier</h2>
+      <div class="space-y-2">
+        <button onclick="loginStep(2)" class="w-full text-left p-4 rounded-xl border-2 border-gray-100 hover:border-nc-blue hover:bg-blue-50 transition-all flex items-center justify-between group">
+          <div>
+            <p class="font-semibold text-nc-blue">Rolex Learning Center</p>
+            <p class="text-xs text-gray-500">EPFL, Lausanne</p>
+          </div>
+          <svg width="18" height="18" fill="none" stroke="#d1d5db" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button class="w-full text-left p-4 rounded-xl border-2 border-gray-100 hover:border-nc-blue hover:bg-blue-50 transition-all flex items-center justify-between opacity-50">
+          <div>
+            <p class="font-semibold text-nc-blue">Tour Perly</p>
+            <p class="text-xs text-gray-500">Genève</p>
+          </div>
+          <svg width="18" height="18" fill="none" stroke="#d1d5db" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Rôle -->
+    <div id="login-step2" class="p-6 hidden">
+      <button onclick="loginStep(1)" class="text-nc-red text-sm font-medium mb-4 flex items-center gap-1">← Rolex Learning Center</button>
+      <h2 class="text-nc-blue font-bold text-lg mb-4">Qui êtes-vous ?</h2>
+      <div class="space-y-2">
+        <button onclick="loginStep(3,'monteur')" class="w-full text-left p-4 rounded-xl border-2 border-gray-100 hover:border-nc-blue hover:bg-blue-50 transition-all flex items-center gap-4 group">
+          <div class="w-10 h-10 rounded-xl bg-gray-100 group-hover:bg-nc-blue flex items-center justify-center transition-colors">
+            <svg width="20" height="20" fill="none" stroke="#6b7280" class="group-hover:stroke-white transition-colors" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div><p class="font-semibold text-nc-blue">Monteur</p><p class="text-xs text-gray-500">Mes tâches du jour</p></div>
+          <svg width="18" height="18" fill="none" stroke="#d1d5db" stroke-width="2" class="ml-auto"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button onclick="loginStep(3,'chef')" class="w-full text-left p-4 rounded-xl border-2 border-gray-100 hover:border-nc-blue hover:bg-blue-50 transition-all flex items-center gap-4 group">
+          <div class="w-10 h-10 rounded-xl bg-gray-100 group-hover:bg-nc-blue flex items-center justify-center transition-colors">
+            <svg width="20" height="20" fill="none" stroke="#6b7280" class="group-hover:stroke-white transition-colors" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <div><p class="font-semibold text-nc-blue">Chef de chantier</p><p class="text-xs text-gray-500">Dashboard équipes</p></div>
+          <svg width="18" height="18" fill="none" stroke="#d1d5db" stroke-width="2" class="ml-auto"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button onclick="loginStep(3,'ca')" class="w-full text-left p-4 rounded-xl border-2 border-gray-100 hover:border-nc-blue hover:bg-blue-50 transition-all flex items-center gap-4 group">
+          <div class="w-10 h-10 rounded-xl bg-gray-100 group-hover:bg-nc-blue flex items-center justify-center transition-colors">
+            <svg width="20" height="20" fill="none" stroke="#6b7280" class="group-hover:stroke-white transition-colors" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+          </div>
+          <div><p class="font-semibold text-nc-blue">Conducteur de travaux</p><p class="text-xs text-gray-500">Pilotage production</p></div>
+          <svg width="18" height="18" fill="none" stroke="#d1d5db" stroke-width="2" class="ml-auto"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 3: PIN -->
+    <div id="login-step3" class="p-6 hidden">
+      <button onclick="loginStep(2)" class="text-nc-red text-sm font-medium mb-4 flex items-center gap-1" id="back-from-pin">← Monteur</button>
+      <h2 class="text-nc-blue font-bold text-lg mb-1">Code PIN</h2>
+      <p class="text-gray-500 text-sm mb-6">Saisir votre code à 4 chiffres</p>
+      <div class="flex justify-center gap-4 mb-6" id="pin-dots">
+        <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <button onclick="pinDigit('1')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">1</button>
+        <button onclick="pinDigit('2')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">2</button>
+        <button onclick="pinDigit('3')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">3</button>
+        <button onclick="pinDigit('4')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">4</button>
+        <button onclick="pinDigit('5')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">5</button>
+        <button onclick="pinDigit('6')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">6</button>
+        <button onclick="pinDigit('7')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">7</button>
+        <button onclick="pinDigit('8')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">8</button>
+        <button onclick="pinDigit('9')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">9</button>
+        <div></div>
+        <button onclick="pinDigit('0')" class="h-14 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 rounded-xl text-xl font-semibold text-nc-blue">0</button>
+        <button onclick="pinDelete()" class="h-14 bg-gray-50 hover:bg-gray-100 rounded-xl text-nc-red text-xl font-semibold flex items-center justify-center">⌫</button>
+      </div>
+    </div>
+  </div>
+  <p class="text-white/30 text-xs mt-8">Neoclima Field Tracker V2.0</p>
+</div>
+
+<!-- PRODUCTION — MES TACHES -->
+<div id="screen-production" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <div class="mb-5">
+      <h2 class="text-lg font-bold text-nc-blue">Lundi 17 mars 2025</h2>
+      <p class="text-gray-500 text-sm mt-0.5">5 tâches · 2 terminées <span class="text-red-500">· 1 bloquée</span></p>
+      <div class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div class="h-full bg-amber-400 rounded-full" style="width:45%"></div>
+      </div>
+      <p class="text-xs text-gray-400 mt-1">45%</p>
+    </div>
+    <div class="space-y-3">
+      <!-- Tâche 1 : done -->
+      <div class="task-card opacity-70">
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" fill="none" stroke="#22c55e" stroke-width="2" class="mt-0.5 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div class="flex-1">
+            <p class="font-semibold text-nc-blue text-sm">Pose gaines VMC – Couloir N2</p>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="tag border-green-200 text-green-700 bg-green-50">Terminée</span>
+              <span class="text-xs text-gray-400">12/12 ml</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Tâche 2 : done -->
+      <div class="task-card opacity-70">
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" fill="none" stroke="#22c55e" stroke-width="2" class="mt-0.5 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div class="flex-1">
+            <p class="font-semibold text-nc-blue text-sm">Raccordement splits – Salle conf. 1</p>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="tag border-green-200 text-green-700 bg-green-50">Terminée</span>
+              <span class="text-xs text-gray-400">4/4 u</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Tâche 3 : en cours -->
+      <div class="task-card" onclick="showScreen('tache')">
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" fill="#3b82f6" stroke="none" class="mt-0.5 shrink-0" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <div class="flex-1">
+            <p class="font-semibold text-nc-blue text-sm">Installation CTA – Toiture Z3</p>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="tag border-blue-200 text-blue-700 bg-blue-50">En cours</span>
+              <span class="text-xs text-gray-400">1/3 u</span>
+            </div>
+            <div class="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div class="h-full bg-blue-400 rounded-full" style="width:33%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Tâche 4 : bloquée -->
+      <div class="task-card border-red-200 bg-red-50/30" onclick="showScreen('tache')">
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" fill="none" stroke="#ef4444" stroke-width="2" class="mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div class="flex-1">
+            <p class="font-semibold text-nc-blue text-sm">Pose évaporateurs – Cuisine</p>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="tag border-red-300 text-red-700 bg-red-50">Bloquée</span>
+              <span class="text-xs text-gray-400">0/6 u</span>
+            </div>
+            <p class="text-xs text-red-600 mt-1.5">⚠ Accès refusé – travaux en cours second oeuvre</p>
+          </div>
+        </div>
+      </div>
+      <!-- Tâche 5 : à faire -->
+      <div class="task-card">
+        <div class="flex items-start gap-3">
+          <svg width="20" height="20" fill="none" stroke="#9ca3af" stroke-width="2" class="mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <div class="flex-1">
+            <p class="font-semibold text-nc-blue text-sm">Test étanchéité – Niveau 1</p>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="tag border-gray-200 text-gray-500 bg-gray-50">À faire</span>
+              <span class="text-xs text-gray-400">0/2 u</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-6">
+      <button class="btn-primary w-full flex items-center justify-center gap-2">
+        <svg width="20" height="20" fill="none" stroke="white" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Scanner une zone
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL TACHE -->
+<div id="screen-tache" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <button onclick="showScreen('production')" class="text-nc-red text-sm font-medium mb-4 flex items-center gap-1">← Mes tâches</button>
+    <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm mb-4">
+      <div class="flex items-start gap-3 mb-4">
+        <span class="tag border-blue-200 text-blue-700 bg-blue-50 mt-0.5">En cours</span>
+      </div>
+      <h2 class="text-nc-blue font-bold text-lg">Installation CTA – Toiture Z3</h2>
+      <p class="text-gray-500 text-sm mt-1">Équipe Alpha · Zone Toiture</p>
+      <div class="mt-4">
+        <div class="flex justify-between text-sm mb-1"><span class="text-gray-500">Avancement</span><span class="font-semibold text-nc-blue">1 / 3 unités</span></div>
+        <div class="h-2.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full bg-blue-400 rounded-full" style="width:33%"></div></div>
+      </div>
+    </div>
+    <!-- Actions -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <button class="bg-white rounded-2xl p-4 border border-gray-100 text-center hover:border-nc-blue transition-all">
+        <svg width="24" height="24" fill="none" stroke="#2C3E50" stroke-width="2" class="mx-auto mb-2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <p class="font-semibold text-nc-blue text-sm">Démarrer</p>
+      </button>
+      <button class="bg-white rounded-2xl p-4 border border-gray-100 text-center hover:border-nc-blue transition-all">
+        <svg width="24" height="24" fill="none" stroke="#2C3E50" stroke-width="2" class="mx-auto mb-2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <p class="font-semibold text-nc-blue text-sm">Terminer</p>
+      </button>
+    </div>
+    <button onclick="showScreen('blocage')" class="w-full bg-red-50 border border-red-200 rounded-2xl p-4 text-center hover:bg-red-100 transition-all mb-4">
+      <div class="flex items-center justify-center gap-2">
+        <svg width="20" height="20" fill="none" stroke="#dc2626" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <p class="font-semibold text-red-600 text-sm">Déclarer un blocage</p>
+      </div>
+    </button>
+    <!-- Saisie quantité -->
+    <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+      <p class="font-semibold text-nc-blue text-sm mb-3">Mise à jour quantité</p>
+      <div class="flex items-center gap-3">
+        <button class="w-10 h-10 rounded-xl bg-gray-100 text-nc-blue font-bold text-xl flex items-center justify-center">−</button>
+        <div class="flex-1 text-center">
+          <span class="text-3xl font-black text-nc-blue">1</span>
+          <span class="text-gray-400 text-sm ml-1">/ 3 u</span>
+        </div>
+        <button class="w-10 h-10 rounded-xl bg-gray-100 text-nc-blue font-bold text-xl flex items-center justify-center">+</button>
+      </div>
+    </div>
+    <!-- Photo -->
+    <div class="mt-4 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+      <p class="font-semibold text-nc-blue text-sm mb-3 flex items-center gap-2">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Photos (<span id="photo-count">2</span>)
+      </p>
+      <div id="photo-grid" class="grid grid-cols-3 gap-2 mb-3">
+        <div class="aspect-square rounded-xl bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center"><svg width="24" height="24" fill="none" stroke="white" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+        <div class="aspect-square rounded-xl bg-gradient-to-br from-gray-200 to-gray-400 flex items-center justify-center"><svg width="24" height="24" fill="none" stroke="white" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+      </div>
+      <button onclick="addPhotoSimulation()" class="w-full h-12 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-400 hover:border-nc-red hover:text-nc-red transition-all text-sm">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Ajouter une photo
+      </button>
+    </div>
+  </div>
+  <!-- Bottom actions -->
+  <div class="p-4 bg-white border-t border-gray-100 space-y-2">
+    <button onclick="showScreen('production')" class="w-full btn-primary flex items-center justify-center gap-2 h-14 text-base">
+      <svg width="20" height="20" fill="none" stroke="white" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Terminer la tâche
+    </button>
+    <button onclick="showScreen('blocage')" class="w-full py-3 px-6 rounded-xl border-2 border-red-200 text-red-600 font-semibold flex items-center justify-center gap-2">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Signaler un blocage
+    </button>
+  </div>
+</div>
+
+<!-- BLOCAGE FORM -->
+<div id="screen-blocage" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <button onclick="showScreen('tache')" class="text-nc-red text-sm font-medium mb-4 flex items-center gap-1">← Détail tâche</button>
+    <h2 class="text-nc-blue font-bold text-lg mb-1">Déclarer un blocage</h2>
+    <p class="text-gray-500 text-sm mb-5">Installation CTA – Toiture Z3</p>
+    <!-- Type de blocage -->
+    <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+      <p class="font-semibold text-nc-blue text-sm mb-3">Type de blocage</p>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="selectBlocage(this)" class="blocage-btn p-3 rounded-xl border-2 border-gray-100 text-sm font-medium text-gray-600 hover:border-nc-red hover:text-nc-red transition-all text-center">Accès impossible</button>
+        <button onclick="selectBlocage(this)" class="blocage-btn selected p-3 rounded-xl border-2 border-nc-red text-nc-red text-sm font-medium text-center">Matériel manquant</button>
+        <button onclick="selectBlocage(this)" class="blocage-btn p-3 rounded-xl border-2 border-gray-100 text-sm font-medium text-gray-600 hover:border-nc-red hover:text-nc-red transition-all text-center">Attente validation</button>
+        <button onclick="selectBlocage(this)" class="blocage-btn p-3 rounded-xl border-2 border-gray-100 text-sm font-medium text-gray-600 hover:border-nc-red hover:text-nc-red transition-all text-center">Autre</button>
+      </div>
+    </div>
+    <!-- Description -->
+    <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+      <p class="font-semibold text-nc-blue text-sm mb-3">Description</p>
+      <textarea class="w-full h-24 p-3 bg-gray-50 rounded-xl text-sm text-gray-700 border border-gray-200 resize-none focus:outline-none focus:border-nc-blue" placeholder="Décrire le blocage...">Évaporateurs réf. NC-4200 non livrés, prévu lundi selon fournisseur.</textarea>
+    </div>
+    <!-- Photo -->
+    <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-5">
+      <p class="font-semibold text-nc-blue text-sm mb-3">Photo (optionnelle)</p>
+      <button class="w-full h-16 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-400">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span class="text-sm">Ajouter une photo</span>
+      </button>
+    </div>
+    <button class="btn-primary w-full">Enregistrer le blocage</button>
+  </div>
+</div>
+
+<!-- DASHBOARD CHEF -->
+<div id="screen-chef" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-2xl mx-auto w-full">
+    <div class="flex items-start justify-between mb-5">
+      <div>
+        <h2 class="text-lg font-bold text-nc-blue">Rolex Learning Center</h2>
+        <p class="text-gray-500 text-sm">Lundi 17 mars 2025</p>
+        <p class="text-sm mt-1"><span class="text-amber-600 font-medium">11 présents</span><span class="text-gray-400"> / 13 prévus</span></p>
+      </div>
+      <button class="btn-secondary text-sm py-2 px-3 flex items-center gap-1">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Bon de travail
+      </button>
+    </div>
+    <!-- Alerte -->
+    <div class="bg-red-50 rounded-2xl p-4 border border-red-100 mb-4">
+      <div class="flex items-center gap-2 mb-2">
+        <svg width="16" height="16" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <p class="text-sm font-bold text-red-700">3 alertes</p>
+      </div>
+      <div class="text-sm text-red-600 space-y-1">
+        <div class="flex items-center gap-2"><span class="font-medium">Équipe Alpha —</span> 1 tâche bloquée</div>
+        <div class="flex items-center gap-2"><span class="font-medium">Équipe Bêta —</span> 2 monteurs absents</div>
+        <div class="flex items-center gap-2"><span class="font-medium">Équipe Gamma —</span> 1 tâche bloquée</div>
+      </div>
+    </div>
+    <!-- Grille équipes -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <!-- Équipe Alpha -->
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <p class="font-bold text-nc-blue">Équipe Alpha</p>
+            <p class="text-xs text-gray-500">4 monteurs · 6 tâches</p>
+          </div>
+          <span class="tag border-red-200 text-red-600 bg-red-50">1 blocage</span>
+        </div>
+        <div class="mb-2 flex justify-between text-xs text-gray-500"><span>Avancement</span><span class="font-semibold text-nc-blue">67%</span></div>
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-amber-400 rounded-full" style="width:67%"></div></div>
+        <div class="flex justify-between mt-3 text-xs text-gray-500">
+          <span>4 terminées</span><span class="text-red-500">1 bloquée</span><span>1 en cours</span>
+        </div>
+      </div>
+      <!-- Équipe Bêta -->
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <p class="font-bold text-nc-blue">Équipe Bêta</p>
+            <p class="text-xs text-gray-500">3/5 monteurs · 8 tâches</p>
+          </div>
+          <span class="tag border-amber-200 text-amber-600 bg-amber-50">2 absents</span>
+        </div>
+        <div class="mb-2 flex justify-between text-xs text-gray-500"><span>Avancement</span><span class="font-semibold text-nc-blue">50%</span></div>
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-amber-400 rounded-full" style="width:50%"></div></div>
+        <div class="flex justify-between mt-3 text-xs text-gray-500">
+          <span>4 terminées</span><span>2 en cours</span><span>2 à faire</span>
+        </div>
+      </div>
+      <!-- Équipe Gamma -->
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <p class="font-bold text-nc-blue">Équipe Gamma</p>
+            <p class="text-xs text-gray-500">4 monteurs · 5 tâches</p>
+          </div>
+          <span class="tag border-red-200 text-red-600 bg-red-50">1 blocage</span>
+        </div>
+        <div class="mb-2 flex justify-between text-xs text-gray-500"><span>Avancement</span><span class="font-semibold text-nc-blue">40%</span></div>
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-red-400 rounded-full" style="width:40%"></div></div>
+        <div class="flex justify-between mt-3 text-xs text-gray-500">
+          <span>2 terminées</span><span class="text-red-500">1 bloquée</span><span>2 à faire</span>
+        </div>
+      </div>
+      <!-- Équipe Delta -->
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <p class="font-bold text-nc-blue">Équipe Delta</p>
+            <p class="text-xs text-gray-500">4 monteurs · 4 tâches</p>
+          </div>
+          <span class="tag border-green-200 text-green-600 bg-green-50">OK</span>
+        </div>
+        <div class="mb-2 flex justify-between text-xs text-gray-500"><span>Avancement</span><span class="font-semibold text-green-600">100%</span></div>
+        <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-green-400 rounded-full" style="width:100%"></div></div>
+        <div class="flex justify-between mt-3 text-xs text-gray-500">
+          <span>4 terminées</span><span>—</span><span>—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PPC DASHBOARD -->
+<div id="screen-ppc" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <div class="mb-5">
+      <h2 class="text-lg font-bold text-nc-blue">PPC — Fiabilité planning</h2>
+      <p class="text-gray-500 text-sm">8 dernières semaines</p>
+    </div>
+    <!-- KPI -->
+    <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm mb-4 flex items-center justify-between">
+      <div>
+        <p class="text-sm text-gray-500">PPC semaine courante</p>
+        <p class="text-4xl font-black mt-1 text-amber-500">71%</p>
+      </div>
+      <div class="flex items-center gap-1 text-sm font-semibold text-green-600">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        +4pts
+      </div>
+    </div>
+    <!-- Chart simulé -->
+    <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+      <p class="text-xs text-gray-400 text-right mb-3">100%</p>
+      <div class="flex items-end gap-2 h-40 px-2">
+        <div class="flex-1 flex flex-col items-center gap-1">
+          <div class="w-full rounded-t-md bg-red-400" style="height:52%"></div>
+          <span class="text-xs text-gray-400">S10</span>
+        </div>
+        <div class="flex-1 flex flex-col items-center gap-1">
+          <div class="w-full rounded-t-md bg-red-400" style="height:58%"></div>
+          <span class="text-xs text-gray-400">S11</span>
+        </div>
+        <div class="flex-1 flex flex-col items-center gap-1">
+          <div class="w-full rounded-t-md bg-amber-400" style="height:63%"></div>
+          <span class="text-xs text-gray-400">S12</span>
+        </div>
+        <div class="flex-1 flex flex-col items-center gap-1">
+          <div class="w-full rounded-t-md bg-amber-400" style="height:67%"></div>
+          <span class="text-xs text-gray-400">S13</span>
+        </div>
+        <div class="flex-1 flex flex-col items-center gap-1">
+          <div class="w-full rounded-t-md bg-amber-400" style="height:60%"></div>
+          <span class="text-xs text-gray-400">S14</span>
+        </div>
+        <div class="flex-1 flex flex-col items-center gap-1">
+          <div class="w-full rounded-t-md bg-amber-400" style="height:65%"></div>
+          <span class="text-xs text-gray-400">S15</span>
+        </div>
+        <div class="flex-1 flex flex-col items-center gap-1">
+          <div class="w-full rounded-t-md bg-amber-400" style="height:67%"></div>
+          <span class="text-xs text-gray-400">S16</span>
+        </div>
+        <div class="flex-1 flex flex-col items-center gap-1 relative">
+          <div class="w-full rounded-t-md bg-amber-400 border-2 border-amber-600" style="height:71%"></div>
+          <span class="text-xs text-amber-600 font-bold">S17</span>
+        </div>
+      </div>
+      <!-- ligne 80% -->
+      <div class="flex items-center gap-2 mt-2">
+        <div class="flex-1 border-t-2 border-dashed border-green-300"></div>
+        <span class="text-xs text-green-500">Objectif 80%</span>
+      </div>
+    </div>
+    <!-- Causes de non-réalisation -->
+    <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+      <p class="font-semibold text-nc-blue text-sm mb-3">Causes de non-réalisation — S17</p>
+      <div class="space-y-2">
+        <div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-red-400 shrink-0"></div><div class="flex-1"><div class="flex justify-between text-xs mb-0.5"><span class="text-gray-600">Approvisionnement</span><span class="font-semibold">38%</span></div><div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-red-400 rounded-full" style="width:38%"></div></div></div></div>
+        <div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-amber-400 shrink-0"></div><div class="flex-1"><div class="flex justify-between text-xs mb-0.5"><span class="text-gray-600">Accès chantier</span><span class="font-semibold">29%</span></div><div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-amber-400 rounded-full" style="width:29%"></div></div></div></div>
+        <div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-blue-400 shrink-0"></div><div class="flex-1"><div class="flex justify-between text-xs mb-0.5"><span class="text-gray-600">Effectifs</span><span class="font-semibold">21%</span></div><div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-blue-400 rounded-full" style="width:21%"></div></div></div></div>
+        <div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-gray-400 shrink-0"></div><div class="flex-1"><div class="flex justify-between text-xs mb-0.5"><span class="text-gray-600">Autre</span><span class="font-semibold">12%</span></div><div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-gray-400 rounded-full" style="width:12%"></div></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QUALITE -->
+<div id="screen-qualite" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="text-lg font-bold text-nc-blue">Non-Conformités</h2>
+        <p class="text-gray-500 text-sm">7 NC · 3 ouvertes</p>
+      </div>
+      <button onclick="toggleNcPanel(true)" class="btn-primary text-sm flex items-center gap-1.5 py-2 px-3">
+        <svg width="16" height="16" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nouvelle NC
+      </button>
+    </div>
+    <!-- Stats -->
+    <div class="grid grid-cols-3 gap-2 mb-4">
+      <div class="bg-red-50 rounded-xl p-3 text-center"><p class="text-2xl font-black text-red-600">3</p><p class="text-xs text-red-500 mt-0.5">Ouvertes</p></div>
+      <div class="bg-gray-900 rounded-xl p-3 text-center"><p class="text-2xl font-black text-white">1</p><p class="text-xs text-white/70 mt-0.5">Bloquantes</p></div>
+      <div class="bg-green-50 rounded-xl p-3 text-center"><p class="text-2xl font-black text-green-600">4</p><p class="text-xs text-green-500 mt-0.5">Levées</p></div>
+    </div>
+    <!-- Filtres -->
+    <div class="flex gap-2 mb-4 overflow-x-auto pb-1">
+      <button class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-nc-blue text-white">Toutes</button>
+      <button class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-gray-200 text-gray-600">Ouvertes</button>
+      <button class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-gray-200 text-gray-600">En cours</button>
+      <button class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-gray-200 text-gray-600">Levées</button>
+    </div>
+    <!-- Liste NC -->
+    <div class="space-y-3">
+      <div class="task-card" onclick="showScreen('nc-detail')">
+        <div class="flex items-start gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="tag border-gray-700 bg-gray-900 text-white">Bloquante</span>
+              <span class="text-xs text-red-600 font-semibold">Ouverte</span>
+            </div>
+            <p class="font-semibold text-nc-blue text-sm">Fuite sur raccord toiture Z3</p>
+            <p class="text-xs text-gray-500 mt-0.5">Zone Toiture · 14 mars 2025</p>
+          </div>
+          <svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2" class="ml-auto shrink-0 mt-1"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+      <div class="task-card">
+        <div class="flex items-start gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="tag border-red-200 text-red-700 bg-red-50">Majeure</span>
+              <span class="text-xs text-amber-600 font-semibold">En cours</span>
+            </div>
+            <p class="font-semibold text-nc-blue text-sm">Câblage non conforme au plan</p>
+            <p class="text-xs text-gray-500 mt-0.5">Zone N2 · 12 mars 2025</p>
+          </div>
+          <svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2" class="ml-auto shrink-0 mt-1"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+      <div class="task-card">
+        <div class="flex items-start gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="tag border-amber-200 text-amber-700 bg-amber-50">Mineure</span>
+              <span class="text-xs text-red-600 font-semibold">Ouverte</span>
+            </div>
+            <p class="font-semibold text-nc-blue text-sm">Fixation insuffisante CTA cuisine</p>
+            <p class="text-xs text-gray-500 mt-0.5">Zone Cuisine · 11 mars 2025</p>
+          </div>
+          <svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2" class="ml-auto shrink-0 mt-1"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+      <div class="task-card opacity-60">
+        <div class="flex items-start gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="tag border-amber-200 text-amber-700 bg-amber-50">Mineure</span>
+              <span class="text-xs text-green-600 font-semibold">Levée</span>
+            </div>
+            <p class="font-semibold text-nc-blue text-sm">Marquage tuyauterie manquant</p>
+            <p class="text-xs text-gray-500 mt-0.5">Zone N1 · 05 mars 2025</p>
+          </div>
+          <svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2" class="ml-auto shrink-0 mt-1"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PLANS -->
+<div id="screen-plans" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <h2 class="text-lg font-bold text-nc-blue mb-1">Plans & Zones</h2>
+    <p class="text-gray-500 text-sm mb-5">Rolex Learning Center</p>
+    <div class="space-y-3">
+      <div class="task-card">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+            <svg width="24" height="24" fill="none" stroke="#2C3E50" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div class="flex-1">
+            <p class="font-semibold text-nc-blue text-sm">Niveau 1 – Plan général</p>
+            <p class="text-xs text-gray-500">PDF · 4.2 MB · 3 zones</p>
+          </div>
+          <svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+      <div class="task-card">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+            <svg width="24" height="24" fill="none" stroke="#2C3E50" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div class="flex-1">
+            <p class="font-semibold text-nc-blue text-sm">Niveau 2 – Plan CVC</p>
+            <p class="text-xs text-gray-500">PDF · 6.1 MB · 5 zones</p>
+          </div>
+          <svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+      <div class="task-card">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+            <svg width="24" height="24" fill="none" stroke="#2C3E50" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div class="flex-1">
+            <p class="font-semibold text-nc-blue text-sm">Toiture – Plan VMC</p>
+            <p class="text-xs text-gray-500">PDF · 2.8 MB · 2 zones</p>
+          </div>
+          <svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="mt-6">
+      <button onclick="showScreen('qrprint')" class="btn-secondary w-full flex items-center justify-center gap-2">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Imprimer QR codes de zones
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- QR PRINT -->
+<div id="screen-qrprint" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <button onclick="showScreen('plans')" class="text-nc-red text-sm font-medium mb-4 flex items-center gap-1">← Plans & Zones</button>
+    <h2 class="text-nc-blue font-bold text-lg mb-5">QR codes de zones</h2>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
+        <div class="w-24 h-24 bg-gray-900 rounded-xl mx-auto mb-3 flex items-center justify-center p-2">
+          <div class="grid grid-cols-3 gap-0.5 w-full h-full">
+            <div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div><div class="bg-white rounded-sm"></div>
+            <div class="bg-gray-900 rounded-sm"></div><div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div>
+            <div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div><div class="bg-white rounded-sm"></div>
+          </div>
+        </div>
+        <p class="font-semibold text-nc-blue text-sm">Zone N1-A</p>
+        <p class="text-xs text-gray-400">Niveau 1 – Secteur A</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
+        <div class="w-24 h-24 bg-gray-900 rounded-xl mx-auto mb-3 flex items-center justify-center p-2">
+          <div class="grid grid-cols-3 gap-0.5 w-full h-full">
+            <div class="bg-white rounded-sm"></div><div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div>
+            <div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div><div class="bg-white rounded-sm"></div>
+            <div class="bg-gray-900 rounded-sm"></div><div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div>
+          </div>
+        </div>
+        <p class="font-semibold text-nc-blue text-sm">Zone N2-B</p>
+        <p class="text-xs text-gray-400">Niveau 2 – Secteur B</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
+        <div class="w-24 h-24 bg-gray-900 rounded-xl mx-auto mb-3 flex items-center justify-center p-2">
+          <div class="grid grid-cols-3 gap-0.5 w-full h-full">
+            <div class="bg-gray-900 rounded-sm"></div><div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div>
+            <div class="bg-white rounded-sm"></div><div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div>
+            <div class="bg-gray-900 rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div><div class="bg-white rounded-sm"></div>
+          </div>
+        </div>
+        <p class="font-semibold text-nc-blue text-sm">Zone Toiture</p>
+        <p class="text-xs text-gray-400">Toiture – Zone principale</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
+        <div class="w-24 h-24 bg-gray-900 rounded-xl mx-auto mb-3 flex items-center justify-center p-2">
+          <div class="grid grid-cols-3 gap-0.5 w-full h-full">
+            <div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div><div class="bg-white rounded-sm"></div>
+            <div class="bg-gray-900 rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div><div class="bg-white rounded-sm"></div>
+            <div class="bg-white rounded-sm"></div><div class="bg-white rounded-sm"></div><div class="bg-gray-900 rounded-sm"></div>
+          </div>
+        </div>
+        <p class="font-semibold text-nc-blue text-sm">Zone Cuisine</p>
+        <p class="text-xs text-gray-400">RDC – Cuisine principale</p>
+      </div>
+    </div>
+    <button class="btn-primary w-full mt-5 flex items-center justify-center gap-2">
+      <svg width="18" height="18" fill="none" stroke="white" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Imprimer tous les QR codes
+    </button>
+  </div>
+</div>
+
+<!-- GANTT -->
+<div id="screen-gantt" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-2xl mx-auto w-full overflow-x-auto">
+    <h2 class="text-lg font-bold text-nc-blue mb-1">Gantt Chantier</h2>
+    <p class="text-gray-500 text-sm mb-4">Rolex Learning Center · Mars–Juin 2025</p>
+    <div class="min-w-max bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <!-- Header -->
+      <div class="grid border-b border-gray-100" style="grid-template-columns: 180px repeat(16,40px)">
+        <div class="p-3 text-xs font-bold text-gray-400 bg-gray-50">Tâche</div>
+        <div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S10</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S11</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S12</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S13</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S14</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S15</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S16</div><div class="p-2 text-center text-xs font-bold text-nc-red bg-red-50">S17</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S18</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S19</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S20</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S21</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S22</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S23</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S24</div><div class="p-2 text-center text-xs text-gray-400 bg-gray-50">S25</div>
+      </div>
+      <!-- Rows -->
+      <div class="grid border-b border-gray-50" style="grid-template-columns: 180px repeat(16,40px)">
+        <div class="p-3 text-xs font-semibold text-nc-blue">Pose gaines VMC</div>
+        <div></div><div></div><div class="p-1"><div class="h-5 bg-green-400 rounded" style="opacity:.8"></div></div><div class="p-1"><div class="h-5 bg-green-400 rounded" style="opacity:.8"></div></div><div class="p-1"><div class="h-5 bg-green-400 rounded" style="opacity:.8"></div></div><div class="p-1"><div class="h-5 bg-green-400 rounded" style="opacity:.8"></div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+      </div>
+      <div class="grid border-b border-gray-50" style="grid-template-columns: 180px repeat(16,40px)">
+        <div class="p-3 text-xs font-semibold text-nc-blue">Raccordement splits</div>
+        <div></div><div></div><div></div><div></div><div class="p-1"><div class="h-5 bg-green-400 rounded" style="opacity:.8"></div></div><div class="p-1"><div class="h-5 bg-green-400 rounded" style="opacity:.8"></div></div><div class="p-1"><div class="h-5 bg-amber-400 rounded" style="opacity:.8"></div></div><div class="p-1 bg-red-50"><div class="h-5 bg-amber-400 rounded" style="opacity:.8"></div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+      </div>
+      <div class="grid border-b border-gray-50" style="grid-template-columns: 180px repeat(16,40px)">
+        <div class="p-3 text-xs font-semibold text-nc-blue">Installation CTA</div>
+        <div></div><div></div><div></div><div></div><div></div><div></div><div class="p-1"><div class="h-5 bg-amber-400 rounded" style="opacity:.8"></div></div><div class="p-1 bg-red-50"><div class="h-5 bg-amber-400 rounded" style="opacity:.8"></div></div><div class="p-1"><div class="h-5 bg-gray-200 rounded"></div></div><div class="p-1"><div class="h-5 bg-gray-200 rounded"></div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+      </div>
+      <div class="grid border-b border-gray-50" style="grid-template-columns: 180px repeat(16,40px)">
+        <div class="p-3 text-xs font-semibold text-nc-blue">Test étanchéité</div>
+        <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div class="p-1"><div class="h-5 bg-gray-200 rounded"></div></div><div class="p-1"><div class="h-5 bg-gray-200 rounded"></div></div><div class="p-1"><div class="h-5 bg-gray-200 rounded"></div></div><div></div><div></div><div></div><div></div><div></div>
+      </div>
+      <div class="grid border-b border-gray-50" style="grid-template-columns: 180px repeat(16,40px)">
+        <div class="p-3 text-xs font-semibold text-nc-blue">Mise en service</div>
+        <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div class="p-1"><div class="h-5 bg-blue-300 rounded"></div></div><div class="p-1"><div class="h-5 bg-blue-300 rounded"></div></div><div class="p-1"><div class="h-5 bg-blue-300 rounded"></div></div><div></div><div></div>
+      </div>
+      <!-- Légende -->
+      <div class="flex gap-4 p-3 bg-gray-50 flex-wrap">
+        <div class="flex items-center gap-1.5"><div class="w-4 h-3 bg-green-400 rounded opacity-80"></div><span class="text-xs text-gray-500">Terminé</span></div>
+        <div class="flex items-center gap-1.5"><div class="w-4 h-3 bg-amber-400 rounded opacity-80"></div><span class="text-xs text-gray-500">En cours</span></div>
+        <div class="flex items-center gap-1.5"><div class="w-4 h-3 bg-gray-200 rounded"></div><span class="text-xs text-gray-500">Planifié</span></div>
+        <div class="flex items-center gap-1.5"><div class="w-4 h-3 bg-blue-300 rounded"></div><span class="text-xs text-gray-500">À venir</span></div>
+        <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-red-100 rounded"></div><span class="text-xs text-gray-500">Semaine courante</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REPORTING -->
+<div id="screen-reporting" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <h2 class="text-lg font-bold text-nc-blue mb-1">Rapport Hebdomadaire</h2>
+    <p class="text-gray-500 text-sm mb-5">Semaine 17 · 11–15 mars 2025</p>
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm"><p class="text-xs text-gray-500">Tâches réalisées</p><p class="text-2xl font-black text-nc-blue mt-0.5">28<span class="text-sm font-normal text-gray-400">/40</span></p><p class="text-xs text-green-600 font-medium">+3 vs S16</p></div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm"><p class="text-xs text-gray-500">PPC semaine</p><p class="text-2xl font-black text-amber-500 mt-0.5">71%</p><p class="text-xs text-green-600 font-medium">+4pts vs S16</p></div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm"><p class="text-xs text-gray-500">Heures prod.</p><p class="text-2xl font-black text-nc-blue mt-0.5">220h</p><p class="text-xs text-gray-400">11 pers. × 4j</p></div>
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm"><p class="text-xs text-gray-500">NC ouvertes</p><p class="text-2xl font-black text-red-500 mt-0.5">3</p><p class="text-xs text-red-500 font-medium">1 bloquante</p></div>
+    </div>
+    <!-- Blocages semaine -->
+    <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+      <p class="font-semibold text-nc-blue text-sm mb-3">Blocages de la semaine</p>
+      <div class="space-y-2">
+        <div class="flex items-start gap-2 text-sm"><span class="text-red-500 mt-0.5 shrink-0">●</span><div><p class="font-medium text-nc-blue">Approvisionnement évaporateurs</p><p class="text-xs text-gray-500">Matériel manquant · Cuisine · 3 jours perdus</p></div></div>
+        <div class="flex items-start gap-2 text-sm"><span class="text-amber-500 mt-0.5 shrink-0">●</span><div><p class="font-medium text-nc-blue">Accès refusé toiture</p><p class="text-xs text-gray-500">Accès impossible · Toiture · 1 jour perdu</p></div></div>
+      </div>
+    </div>
+    <button class="btn-primary w-full flex items-center justify-center gap-2">
+      <svg width="18" height="18" fill="none" stroke="white" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Exporter en PDF
+    </button>
+  </div>
+</div>
+
+<!-- NC DETAIL -->
+<div id="screen-nc-detail" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="bg-nc-blue text-white px-4 py-3">
+    <button onclick="showScreen('qualite')" class="flex items-center gap-1.5 text-white/70 mb-2 text-sm">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Retour
+    </button>
+    <div class="flex items-start gap-2">
+      <svg width="18" height="18" fill="none" stroke="#fca5a5" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <div>
+        <h2 class="font-bold text-base">Fuite sur raccord toiture Z3</h2>
+        <p class="text-white/60 text-xs mt-0.5">NC #1710001 · <span>Bloquante</span></p>
+      </div>
+    </div>
+  </div>
+  <div class="p-4 space-y-4 max-w-lg mx-auto w-full">
+    <div class="bg-white rounded-2xl p-4 border border-gray-100">
+      <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Description</p>
+      <p class="text-sm text-gray-700">Fuite constatée sur le raccord flexible entre le groupe de toiture Z3 et le réseau primaire. Humidité visible sur isolant.</p>
+    </div>
+    <div class="bg-white rounded-2xl p-4 border border-gray-100">
+      <div class="grid grid-cols-2 gap-4">
+        <div><p class="text-xs text-gray-400">Statut</p><p class="font-semibold text-sm mt-0.5 text-red-600">Ouverte</p></div>
+        <div><p class="text-xs text-gray-400">Gravité</p><p class="font-semibold text-sm mt-0.5">Bloquante</p></div>
+        <div><p class="text-xs text-gray-400">Échéance</p><p class="font-semibold text-sm mt-0.5">20 mars 2025</p></div>
+        <div><p class="text-xs text-gray-400">Zone</p><p class="font-semibold text-sm mt-0.5">Toiture</p></div>
+      </div>
+    </div>
+    <!-- Photos -->
+    <div class="bg-white rounded-2xl p-4 border border-gray-100">
+      <p class="text-xs font-semibold text-gray-500 uppercase mb-3">Photos (<span id="nc-photo-count">1</span>)</p>
+      <div id="nc-photo-grid" class="grid grid-cols-3 gap-2">
+        <div class="aspect-square rounded-xl bg-gradient-to-br from-red-200 to-red-400 flex items-center justify-center"><svg width="24" height="24" fill="none" stroke="white" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+      </div>
+    </div>
+  </div>
+  <div class="p-4 bg-white border-t border-gray-100 space-y-2 max-w-lg mx-auto w-full">
+    <button onclick="leverNC()" class="w-full btn-primary flex items-center justify-center gap-2">
+      <svg width="18" height="18" fill="none" stroke="white" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Lever la NC
+    </button>
+    <button onclick="addNcPhoto()" class="w-full py-3 px-6 rounded-xl border border-gray-200 text-gray-600 font-medium flex items-center justify-center gap-2">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Ajouter photo "après"
+    </button>
+  </div>
+</div>
+
+<!-- MESURES -->
+<div id="screen-mesures" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="text-lg font-bold text-nc-blue">Mesures qualité</h2>
+        <p class="text-gray-500 text-sm">8 mesures · 2 non conformes</p>
+      </div>
+      <button onclick="toggleMesurePanel(true)" class="btn-primary text-sm flex items-center gap-1.5 py-2 px-3">
+        <svg width="16" height="16" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nouvelle
+      </button>
+    </div>
+    <div class="grid grid-cols-3 gap-2 mb-4">
+      <div class="bg-green-50 rounded-xl p-3 text-center"><p class="text-2xl font-black text-green-600">6</p><p class="text-xs text-green-500 mt-0.5">Conformes</p></div>
+      <div class="bg-red-50 rounded-xl p-3 text-center"><p class="text-2xl font-black text-red-600">2</p><p class="text-xs text-red-500 mt-0.5">Non conf.</p></div>
+      <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-2xl font-black text-gray-700">8</p><p class="text-xs text-gray-500 mt-0.5">Total</p></div>
+    </div>
+    <div class="space-y-3">
+      <div class="bg-white rounded-2xl p-4 border border-green-100 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <p class="font-semibold text-nc-blue text-sm">Pression réseau primaire</p>
+          <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Conforme</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-gray-500">
+          <span>Prévu: 4.5 bar</span><span>Mesuré: <strong class="text-gray-700">4.6 bar</strong></span><span>Écart: +2.2%</span>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">Zone N1 · 15 mars 2025</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 border border-red-100 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <p class="font-semibold text-nc-blue text-sm">Débit VMC toiture</p>
+          <span class="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Non conforme</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-gray-500">
+          <span>Prévu: 2400 m³/h</span><span>Mesuré: <strong class="text-red-600">1980 m³/h</strong></span><span>Écart: -17.5%</span>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">Zone Toiture · 14 mars 2025</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 border border-green-100 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <p class="font-semibold text-nc-blue text-sm">Température soufflage N2</p>
+          <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Conforme</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-gray-500">
+          <span>Prévu: 18°C</span><span>Mesuré: <strong class="text-gray-700">17.5°C</strong></span><span>Écart: -2.8%</span>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">Zone N2 · 13 mars 2025</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ÉQUIPES -->
+<div id="screen-equipes" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="text-lg font-bold text-nc-blue">Équipes</h2>
+        <p class="text-gray-500 text-sm">4 équipes · 14 personnes</p>
+      </div>
+      <button onclick="showScreen('param-equipes')" class="btn-primary text-sm flex items-center gap-1.5 py-2 px-3">
+        <svg width="16" height="16" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nouvelle équipe
+      </button>
+    </div>
+    <div class="space-y-3">
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-4 h-4 rounded-full bg-red-500"></div>
+            <p class="font-bold text-nc-blue">Équipe Alpha</p>
+            <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">4 membres</span>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5"><div class="w-5 h-5 rounded-full bg-nc-blue flex items-center justify-center text-white text-[9px] font-bold">JP</div><span class="text-xs font-medium text-gray-700">Jean-Pierre M.</span><span class="text-[10px] text-gray-400">(monteur)</span></div>
+          <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5"><div class="w-5 h-5 rounded-full bg-nc-blue flex items-center justify-center text-white text-[9px] font-bold">MD</div><span class="text-xs font-medium text-gray-700">Marc D.</span><span class="text-[10px] text-gray-400">(monteur)</span></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-4 h-4 rounded-full bg-blue-500"></div>
+            <p class="font-bold text-nc-blue">Équipe Bêta</p>
+            <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">5 membres</span>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5"><div class="w-5 h-5 rounded-full bg-nc-blue flex items-center justify-center text-white text-[9px] font-bold">SB</div><span class="text-xs font-medium text-gray-700">Sophie B.</span><span class="text-[10px] text-gray-400">(chef)</span></div>
+          <div class="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5"><div class="w-5 h-5 rounded-full bg-nc-blue flex items-center justify-center text-white text-[9px] font-bold">TF</div><span class="text-xs font-medium text-gray-700">Thomas F.</span><span class="text-[10px] text-gray-400">(monteur)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TABLEAU FINANCIER -->
+<div id="screen-financier" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <div class="mb-5">
+      <h2 class="text-lg font-bold text-nc-blue">Tableau financier</h2>
+      <p class="text-gray-500 text-sm">Rolex Learning Center</p>
+    </div>
+    <div class="space-y-4">
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <p class="text-sm text-gray-500 mb-1">Budget global</p>
+        <p class="text-3xl font-black text-nc-blue">2'400 h</p>
+        <p class="text-sm text-gray-500 mt-0.5">312'000 CHF</p>
+      </div>
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-sm font-semibold text-nc-blue">Avancement physique</p>
+          <span class="text-xl font-black text-nc-blue">62%</span>
+        </div>
+        <div class="h-2.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full bg-nc-blue rounded-full" style="width:62%"></div></div>
+      </div>
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-sm font-semibold text-nc-blue">Avancement heures</p>
+          <div class="flex items-center gap-2">
+            <span class="text-xl font-black text-nc-blue">71%</span>
+            <span class="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">↑ +9pts</span>
+          </div>
+        </div>
+        <div class="h-2.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full bg-red-400 rounded-full" style="width:71%"></div></div>
+      </div>
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+        <div class="flex items-center justify-between px-4 py-3"><p class="text-sm text-gray-600">Heures prévues à date</p><p class="text-sm font-bold text-gray-800">1'488 h</p></div>
+        <div class="flex items-center justify-between px-4 py-3"><p class="text-sm text-gray-600">Heures réalisées</p><p class="text-sm font-bold text-gray-800">1'704 h</p></div>
+        <div class="flex items-center justify-between px-4 py-3"><p class="text-sm text-gray-600">Dérive</p><p class="text-sm font-bold text-red-600">+216 h <span class="text-xs font-normal text-gray-400">(28'080 CHF)</span></p></div>
+        <div class="flex items-center justify-between px-4 py-3"><p class="text-sm font-bold text-nc-blue">Projection fin de chantier</p><p class="text-sm font-bold text-nc-blue">2'748 h</p></div>
+      </div>
+      <div class="bg-red-50 rounded-2xl p-4 border border-red-100 flex items-start gap-2">
+        <svg width="16" height="16" fill="none" stroke="#ef4444" stroke-width="2" class="mt-0.5 shrink-0"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div>
+          <p class="text-sm font-semibold text-red-700">Dérive heures importante</p>
+          <p class="text-xs text-red-600 mt-0.5">+9pts vs avancement physique — analyser les causes</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PARAM EQUIPES -->
+<div id="screen-param-equipes" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <h2 class="text-lg font-bold text-nc-blue mb-1">Gestion des équipes</h2>
+    <p class="text-gray-500 text-sm mb-5">Rolex Learning Center</p>
+    <!-- Équipe existante avec édition inline -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm mb-3">
+      <div class="p-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-4 h-4 rounded-full bg-red-500"></div>
+            <p class="font-bold text-nc-blue">Équipe Alpha</p>
+            <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">4 membres</span>
+          </div>
+          <button onclick="toggleEquipeEdit('alpha')" class="p-2 rounded-xl hover:bg-gray-100">
+            <svg width="14" height="14" fill="none" stroke="#9ca3af" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+        </div>
+        <!-- Inline edit form (hidden by default) -->
+        <div id="edit-alpha" class="hidden mt-3 pt-3 border-t border-gray-100 space-y-3">
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">Nom de l'équipe</label>
+            <input type="text" value="Équipe Alpha" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-nc-blue">
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 mb-2 block">Couleur</label>
+            <div class="flex gap-2">
+              <button class="w-8 h-8 rounded-full bg-red-500 ring-2 ring-offset-2 ring-red-500"></button>
+              <button class="w-8 h-8 rounded-full bg-nc-blue"></button>
+              <button class="w-8 h-8 rounded-full bg-blue-500"></button>
+              <button class="w-8 h-8 rounded-full bg-green-500"></button>
+              <button class="w-8 h-8 rounded-full bg-amber-500"></button>
+              <button class="w-8 h-8 rounded-full bg-purple-500"></button>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn-primary text-sm py-2 px-4">Enregistrer</button>
+            <button onclick="toggleEquipeEdit('alpha')" class="btn-secondary text-sm py-2 px-4">Annuler</button>
+          </div>
+        </div>
+      </div>
+      <!-- Membres -->
+      <div class="border-t border-gray-50 divide-y divide-gray-50">
+        <div class="flex items-center justify-between px-4 py-2.5">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-full bg-nc-blue flex items-center justify-center text-white text-[10px] font-bold">JP</div>
+            <div><p class="text-sm font-medium text-gray-700">Jean-Pierre Martin</p><p class="text-xs text-gray-400">Monteur · PIN: ****</p></div>
+          </div>
+          <button class="p-1.5 rounded-lg hover:bg-gray-100">
+            <svg width="14" height="14" fill="none" stroke="#9ca3af" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+        </div>
+        <div class="flex items-center justify-between px-4 py-2.5">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-full bg-nc-blue flex items-center justify-center text-white text-[10px] font-bold">MD</div>
+            <div><p class="text-sm font-medium text-gray-700">Marc Dubois</p><p class="text-xs text-gray-400">Monteur · PIN: ****</p></div>
+          </div>
+          <button class="p-1.5 rounded-lg hover:bg-red-50">
+            <svg width="14" height="14" fill="none" stroke="#ef4444" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+        <div class="px-4 py-2.5">
+          <button class="flex items-center gap-1.5 text-nc-red text-xs font-semibold">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Ajouter un membre
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Nouvelle équipe card -->
+    <button class="w-full border-2 border-dashed border-gray-200 rounded-2xl p-4 flex items-center justify-center gap-2 text-gray-400 hover:border-nc-red hover:text-nc-red transition-all text-sm font-medium">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nouvelle équipe
+    </button>
+  </div>
+</div>
+
+<!-- PARAM TASK TYPES -->
+<div id="screen-param-tasktypes" class="screen hidden flex-col min-h-screen bg-gray-50 pt-14 pb-20">
+  <div class="p-4 max-w-lg mx-auto w-full">
+    <h2 class="text-lg font-bold text-nc-blue mb-1">Types de tâches</h2>
+    <p class="text-gray-500 text-sm mb-5">6 types configurés</p>
+    <!-- Type en édition (inline) -->
+    <div class="bg-white rounded-2xl border-2 border-nc-blue shadow-sm mb-3 p-4 space-y-3">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-xs font-bold text-nc-blue uppercase">Modification</p>
+        <button class="text-xs text-gray-400">Annuler</button>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Nom</label>
+        <input type="text" value="Pose gaines VMC" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-nc-blue">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Unité</label>
+          <select class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+            <option>ml</option><option>m²</option><option>u</option><option>h</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Rendement (u/h)</label>
+          <input type="number" value="4" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Phases (séparées par virgule)</label>
+        <input type="text" value="Traçage, Fixations, Pose gaines, Raccordements" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+        <div class="flex flex-wrap gap-1.5 mt-2">
+          <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Traçage</span>
+          <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Fixations</span>
+          <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Pose gaines</span>
+          <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Raccordements</span>
+        </div>
+      </div>
+      <button class="btn-primary text-sm py-2 w-full">Enregistrer</button>
+    </div>
+    <!-- Types liste -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+      <div class="flex items-center justify-between px-4 py-3">
+        <div><p class="text-sm font-semibold text-nc-blue">Raccordement splits</p><p class="text-xs text-gray-400">Unité · 2 u/h · 3 phases</p></div>
+        <div class="flex items-center gap-1">
+          <button class="p-2 rounded-lg hover:bg-gray-100"><svg width="14" height="14" fill="none" stroke="#9ca3af" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+          <button class="p-2 rounded-lg hover:bg-red-50"><svg width="14" height="14" fill="none" stroke="#ef4444" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+        </div>
+      </div>
+      <div class="flex items-center justify-between px-4 py-3">
+        <div><p class="text-sm font-semibold text-nc-blue">Installation CTA</p><p class="text-xs text-gray-400">Unité · 0.5 u/h · 5 phases</p></div>
+        <div class="flex items-center gap-1">
+          <button class="p-2 rounded-lg hover:bg-gray-100"><svg width="14" height="14" fill="none" stroke="#9ca3af" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+          <button class="p-2 rounded-lg hover:bg-red-50"><svg width="14" height="14" fill="none" stroke="#ef4444" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+        </div>
+      </div>
+      <div class="flex items-center justify-between px-4 py-3">
+        <div><p class="text-sm font-semibold text-nc-blue">Test étanchéité</p><p class="text-xs text-gray-400">Forfait · 1 u/h · 2 phases</p></div>
+        <div class="flex items-center gap-1">
+          <button class="p-2 rounded-lg hover:bg-gray-100"><svg width="14" height="14" fill="none" stroke="#9ca3af" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+          <button class="p-2 rounded-lg hover:bg-red-50"><svg width="14" height="14" fill="none" stroke="#ef4444" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <button class="w-full border-2 border-dashed border-gray-200 rounded-2xl p-4 flex items-center justify-center gap-2 text-gray-400 hover:border-nc-red hover:text-nc-red transition-all text-sm font-medium mt-3">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nouveau type de tâche
+    </button>
+  </div>
+</div>
+
+<!-- NOUVELLE NC PANEL (bottom sheet) -->
+<div id="nc-panel-overlay" class="hidden fixed inset-0 z-50 bg-black/40" onclick="toggleNcPanel(false)"></div>
+<div id="nc-panel" class="hidden fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl max-h-[90vh] overflow-y-auto">
+  <div class="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between rounded-t-3xl">
+    <h3 class="font-bold text-nc-blue">Nouvelle non-conformité</h3>
+    <button onclick="toggleNcPanel(false)" class="p-2 rounded-full hover:bg-gray-100">
+      <svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="p-5 space-y-4">
+    <div>
+      <label class="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Titre *</label>
+      <input type="text" placeholder="Décrire la non-conformité…" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-nc-blue">
+    </div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Gravité *</label>
+      <div class="flex gap-2">
+        <button onclick="selectGravite(this,'mineure')" class="gravite-btn flex-1 py-2.5 rounded-xl border-2 border-amber-200 bg-amber-50 text-amber-700 text-sm font-semibold">Mineure</button>
+        <button onclick="selectGravite(this,'majeure')" class="gravite-btn flex-1 py-2.5 rounded-xl border-2 border-red-200 bg-red-50 text-red-700 text-sm font-semibold">Majeure</button>
+        <button onclick="selectGravite(this,'bloquante')" class="gravite-btn flex-1 py-2.5 rounded-xl border-2 border-gray-700 bg-gray-900 text-white text-sm font-semibold">Bloquante</button>
+      </div>
+    </div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Zone</label>
+      <select class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+        <option>— Sélectionner une zone —</option>
+        <option>Zone N1-A · Niveau 1</option>
+        <option>Zone N2-B · Niveau 2</option>
+        <option>Zone Toiture</option>
+        <option>Zone Cuisine</option>
+      </select>
+    </div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Description</label>
+      <textarea rows="3" placeholder="Détails supplémentaires…" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:border-nc-blue"></textarea>
+    </div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Date d'échéance</label>
+      <input type="date" value="2025-03-24" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-nc-blue">
+    </div>
+    <button onclick="createNC()" class="w-full btn-primary py-3.5 flex items-center justify-center gap-2 text-base">
+      <svg width="18" height="18" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Créer la NC
+    </button>
+  </div>
+</div>
+
+<!-- NOUVELLE MESURE PANEL (bottom sheet) -->
+<div id="mesure-panel-overlay" class="hidden fixed inset-0 z-50 bg-black/40" onclick="toggleMesurePanel(false)"></div>
+<div id="mesure-panel" class="hidden fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl max-h-[90vh] overflow-y-auto">
+  <div class="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between rounded-t-3xl">
+    <h3 class="font-bold text-nc-blue">Nouvelle mesure</h3>
+    <button onclick="toggleMesurePanel(false)" class="p-2 rounded-full hover:bg-gray-100">
+      <svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="p-5 space-y-4">
+    <div>
+      <label class="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Type</label>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="selectMesureType(this)" class="mesure-type-btn px-3 py-1.5 rounded-full text-xs font-semibold border-2 border-nc-blue bg-nc-blue text-white">Pression</button>
+        <button onclick="selectMesureType(this)" class="mesure-type-btn px-3 py-1.5 rounded-full text-xs font-semibold border-2 border-gray-200 text-gray-600">Débit</button>
+        <button onclick="selectMesureType(this)" class="mesure-type-btn px-3 py-1.5 rounded-full text-xs font-semibold border-2 border-gray-200 text-gray-600">Température</button>
+        <button onclick="selectMesureType(this)" class="mesure-type-btn px-3 py-1.5 rounded-full text-xs font-semibold border-2 border-gray-200 text-gray-600">Bruit</button>
+        <button onclick="selectMesureType(this)" class="mesure-type-btn px-3 py-1.5 rounded-full text-xs font-semibold border-2 border-gray-200 text-gray-600">Étanchéité</button>
+      </div>
+    </div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Désignation</label>
+      <input type="text" placeholder="Ex: Pression réseau primaire N1" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-nc-blue">
+    </div>
+    <div class="grid grid-cols-3 gap-3">
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Valeur prévue</label>
+        <input type="number" id="val-prevue" placeholder="4.5" oninput="calcConformite()" class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Valeur mesurée</label>
+        <input type="number" id="val-mesuree" placeholder="4.6" oninput="calcConformite()" class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 mb-1 block">Unité</label>
+        <select class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+          <option>bar</option><option>m³/h</option><option>°C</option><option>dB</option><option>Pa</option>
+        </select>
+      </div>
+    </div>
+    <!-- Conformité live -->
+    <div id="conformite-preview" class="hidden rounded-xl px-4 py-3 text-sm font-semibold flex items-center gap-2"></div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Zone</label>
+      <select class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+        <option>— Zone —</option>
+        <option>Zone N1-A</option><option>Zone N2-B</option><option>Zone Toiture</option><option>Zone Cuisine</option>
+      </select>
+    </div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Date de mesure</label>
+      <input type="date" value="2025-03-17" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+    </div>
+    <button onclick="createMesure()" class="w-full btn-primary py-3.5 flex items-center justify-center gap-2 text-base">
+      <svg width="18" height="18" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Enregistrer la mesure
+    </button>
+  </div>
+</div>
+
+<!-- ===================== JS ===================== -->
+<script>
+let currentPin = ''
+let currentRole = 'monteur'
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'))
+  const screen = document.getElementById('screen-' + id)
+  if (screen) screen.classList.add('active')
+
+  const titles = {
+    production: 'Mes Tâches', tache: 'Détail Tâche', blocage: 'Blocage',
+    chef: 'Dashboard Chef', ppc: 'PPC', qualite: 'Non-Conformités',
+    'nc-detail': 'Détail NC', mesures: 'Mesures Qualité', equipes: 'Équipes',
+    financier: 'Tableau Financier', plans: 'Plans & Zones', qrprint: 'QR Codes',
+    gantt: 'Gantt', reporting: 'Rapport Hebdo',
+    'param-equipes': 'Gestion Équipes', 'param-tasktypes': 'Types de Tâches'
+  }
+  const topbar = document.getElementById('topbar')
+  const bottomnav = document.getElementById('bottomnav')
+  if (id === 'login') { topbar.classList.add('hidden'); bottomnav.classList.add('hidden'); return; }
+  topbar.classList.remove('hidden')
+  bottomnav.classList.remove('hidden')
+  const titleEl = document.getElementById('topbar-title')
+  if (titleEl) titleEl.textContent = titles[id] || 'Neoclima'
+
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'))
+  const navMap = { production: 0, tache: 0, blocage: 0, ppc: 1, qualite: 2, 'nc-detail': 2, mesures: 2, plans: 3, qrprint: 3 }
+  const idx = navMap[id]
+  if (idx !== undefined) document.querySelectorAll('.nav-item')[idx]?.classList.add('active')
+
+  document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'))
+}
+
+function toggleSidebar() {
+  const s = document.getElementById('sidebar')
+  const o = document.getElementById('sidebar-overlay')
+  const open = !s.classList.contains('hidden')
+  s.classList.toggle('hidden', open)
+  o.classList.toggle('hidden', open)
+}
+
+function loginStep(step, role) {
+  document.getElementById('login-step1').classList.add('hidden')
+  document.getElementById('login-step2').classList.add('hidden')
+  document.getElementById('login-step3').classList.add('hidden')
+  if (role) {
+    currentRole = role
+    const labels = { monteur: 'Monteur', chef: 'Chef de chantier', ca: 'Conducteur de travaux' }
+    document.getElementById('back-from-pin').textContent = '← ' + labels[role]
+  }
+  document.getElementById('login-step' + step).classList.remove('hidden')
+  if (step === 3) { currentPin = ''; updatePinDots() }
+}
+
+function updatePinDots() {
+  const dots = document.querySelectorAll('.pin-dot')
+  dots.forEach((d, i) => d.classList.toggle('filled', i < currentPin.length))
+}
+
+function pinDigit(d) {
+  if (currentPin.length >= 4) return
+  currentPin += d
+  updatePinDots()
+  if (currentPin.length === 4) {
+    setTimeout(() => {
+      const validPins = { monteur: '0001', chef: '9999', ca: '8888' }
+      if (currentPin === validPins[currentRole] || currentPin === '0002') {
+        showScreen(currentRole === 'chef' ? 'chef' : currentRole === 'ca' ? 'ppc' : 'production')
+      } else {
+        const dots = document.querySelectorAll('.pin-dot')
+        dots.forEach(d => d.style.borderColor = '#ef4444')
+        setTimeout(() => { currentPin = ''; updatePinDots(); dots.forEach(d => d.style.borderColor = '') }, 500)
+      }
+    }, 100)
+  }
+}
+
+function pinDelete() {
+  currentPin = currentPin.slice(0, -1)
+  updatePinDots()
+}
+
+function selectBlocage(btn) {
+  document.querySelectorAll('.blocage-btn').forEach(b => {
+    b.classList.remove('selected', 'border-nc-red', 'text-nc-red')
+    b.classList.add('border-gray-100', 'text-gray-600')
+  })
+  btn.classList.add('selected', 'border-nc-red', 'text-nc-red')
+  btn.classList.remove('border-gray-100', 'text-gray-600')
+}
+
+// Nouvelle NC panel
+function toggleNcPanel(open) {
+  document.getElementById('nc-panel').classList.toggle('hidden', !open)
+  document.getElementById('nc-panel-overlay').classList.toggle('hidden', !open)
+}
+
+function selectGravite(btn) {
+  document.querySelectorAll('.gravite-btn').forEach(b => {
+    b.style.opacity = '0.4'
+  })
+  btn.style.opacity = '1'
+}
+
+function createNC() {
+  toggleNcPanel(false)
+  const el = document.createElement('div')
+  el.className = 'task-card border-amber-100 bg-amber-50/30'
+  el.innerHTML = `<div class="flex items-start gap-3"><div><div class="flex items-center gap-2 mb-1.5"><span class="tag border-amber-200 text-amber-700 bg-amber-50">Mineure</span><span class="text-xs text-red-600 font-semibold">Ouverte</span></div><p class="font-semibold text-nc-blue text-sm">Nouvelle NC créée</p><p class="text-xs text-gray-500 mt-0.5">Zone Toiture · 17 mars 2025</p></div><svg width="18" height="18" fill="none" stroke="#9ca3af" stroke-width="2" class="ml-auto shrink-0 mt-1"><polyline points="9 18 15 12 9 6"/></svg></div>`
+  const list = document.querySelector('#screen-qualite .space-y-3')
+  if (list) list.prepend(el)
+}
+
+// Nouvelle mesure panel
+function toggleMesurePanel(open) {
+  document.getElementById('mesure-panel').classList.toggle('hidden', !open)
+  document.getElementById('mesure-panel-overlay').classList.toggle('hidden', !open)
+}
+
+function selectMesureType(btn) {
+  document.querySelectorAll('.mesure-type-btn').forEach(b => {
+    b.className = 'mesure-type-btn px-3 py-1.5 rounded-full text-xs font-semibold border-2 border-gray-200 text-gray-600'
+  })
+  btn.className = 'mesure-type-btn px-3 py-1.5 rounded-full text-xs font-semibold border-2 border-nc-blue bg-nc-blue text-white'
+}
+
+function calcConformite() {
+  const p = parseFloat(document.getElementById('val-prevue').value)
+  const m = parseFloat(document.getElementById('val-mesuree').value)
+  const el = document.getElementById('conformite-preview')
+  if (!isNaN(p) && !isNaN(m) && p !== 0) {
+    const ecart = ((m - p) / p) * 100
+    const conforme = Math.abs(ecart) <= 10
+    el.className = `rounded-xl px-4 py-3 text-sm font-semibold flex items-center gap-2 ${conforme ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`
+    el.innerHTML = conforme
+      ? `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Conforme — écart ${ecart > 0 ? '+' : ''}${ecart.toFixed(1)}%`
+      : `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Non conforme — écart ${ecart > 0 ? '+' : ''}${ecart.toFixed(1)}%`
+    el.classList.remove('hidden')
+  } else {
+    el.classList.add('hidden')
+  }
+}
+
+function createMesure() {
+  toggleMesurePanel(false)
+  const el = document.createElement('div')
+  el.className = 'bg-white rounded-2xl p-4 border border-green-100 shadow-sm'
+  el.innerHTML = `<div class="flex items-center justify-between mb-1"><p class="font-semibold text-nc-blue text-sm">Nouvelle mesure</p><span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Conforme</span></div><div class="flex items-center gap-3 text-xs text-gray-500"><span>Prévu: —</span><span>Mesuré: —</span></div><p class="text-xs text-gray-400 mt-1">17 mars 2025</p>`
+  const list = document.querySelector('#screen-mesures .space-y-3')
+  if (list) list.prepend(el)
+}
+
+// NC Detail actions
+function leverNC() {
+  const btn = event.currentTarget
+  btn.disabled = true
+  btn.innerHTML = '<svg width="18" height="18" fill="none" stroke="white" stroke-width="2" class="animate-spin"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0110 10" stroke-opacity=".75"/></svg> Enregistrement…'
+  setTimeout(() => {
+    btn.innerHTML = '✓ NC levée'
+    btn.className = 'w-full py-3 rounded-xl bg-green-500 text-white font-semibold flex items-center justify-center gap-2'
+    document.querySelector('#screen-nc-detail .bg-nc-blue p.text-xs').textContent = 'NC #1710001 · Bloquante — Levée le 17 mars 2025'
+  }, 800)
+}
+
+function addNcPhoto() {
+  const grid = document.getElementById('nc-photo-grid')
+  const countEl = document.getElementById('nc-photo-count')
+  const colors = ['from-green-200 to-green-400', 'from-blue-200 to-blue-400', 'from-purple-200 to-purple-400']
+  const c = colors[grid.children.length % colors.length]
+  const div = document.createElement('div')
+  div.className = `aspect-square rounded-xl bg-gradient-to-br ${c} flex items-center justify-center`
+  div.innerHTML = `<svg width="24" height="24" fill="none" stroke="white" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>`
+  grid.appendChild(div)
+  countEl.textContent = grid.children.length
+}
+
+// TacheDetail photo simulation
+function addPhotoSimulation() {
+  const grid = document.getElementById('photo-grid')
+  const countEl = document.getElementById('photo-count')
+  const colors = ['from-green-200 to-green-400', 'from-amber-200 to-amber-400', 'from-purple-200 to-purple-400', 'from-pink-200 to-pink-400']
+  const c = colors[grid.children.length % colors.length]
+  const div = document.createElement('div')
+  div.className = `aspect-square rounded-xl bg-gradient-to-br ${c} flex items-center justify-center`
+  div.innerHTML = `<svg width="24" height="24" fill="none" stroke="white" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>`
+  grid.appendChild(div)
+  countEl.textContent = grid.children.length
+}
+
+// ParamEquipes inline edit toggle
+function toggleEquipeEdit(id) {
+  const el = document.getElementById('edit-' + id)
+  if (el) el.classList.toggle('hidden')
+}
+</script>
+</body>
+</html>
