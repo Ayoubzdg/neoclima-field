@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Shield, Plus, AlertTriangle, ChevronRight, X, Check, Loader2 } from 'lucide-react'
+import { Shield, Plus, AlertTriangle, ChevronRight, X, Check, Loader2, Camera, ImageIcon } from 'lucide-react'
 import { useQualiteStore } from '@/store/qualiteStore'
 import { useAuthStore } from '@/store/authStore'
-import { getZonesByChantier } from '@/lib/supabase'
+import { getZonesByChantier, uploadPhoto, savePhoto } from '@/lib/supabase'
 import { formatDateShort, todayISO } from '@/utils/dates'
 import type { NcGravite, NcStatut, ZoneTakt } from '@/types/models'
 
@@ -30,7 +30,7 @@ interface NcForm {
 
 // ── Slide-in panel pour créer une NC ────────────────────────
 function NouvelleNcPanel({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const { chantier } = useAuthStore()
+  const { chantier, role } = useAuthStore()
   const { createNC } = useQualiteStore()
   const [zones, setZones] = useState<ZoneTakt[]>([])
   const [isSaving, setIsSaving] = useState(false)
@@ -43,25 +43,68 @@ function NouvelleNcPanel({ onClose, onCreated }: { onClose: () => void; onCreate
     date_echeance: '',
   })
 
+  // ── Photo ──────────────────────────────────────────────────
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+
   useEffect(() => {
     if (!chantier?.id) return
     getZonesByChantier(chantier.id).then(setZones)
   }, [chantier?.id])
+
+  // Nettoyage de l'URL de prévisualisation quand le panel ferme
+  useEffect(() => {
+    return () => { if (photoPreview) URL.revokeObjectURL(photoPreview) }
+  }, [photoPreview])
+
+  const handlePhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (photoPreview) URL.revokeObjectURL(photoPreview)
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  const handleRemovePhoto = () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview)
+    setPhotoFile(null)
+    setPhotoPreview(null)
+    if (cameraInputRef.current) cameraInputRef.current.value = ''
+    if (galleryInputRef.current) galleryInputRef.current.value = ''
+  }
 
   const handleSubmit = async () => {
     if (!form.titre.trim() || !form.zone_takt_id) return
     setIsSaving(true)
     setSaveError(null)
     try {
-      await createNC({
+      // 1. Créer la NC → obtenir l'id
+      const created = await createNC({
         titre: form.titre.trim(),
         description: form.description.trim() || null,
         gravite: form.gravite,
         statut: 'ouverte',
         zone_takt_id: form.zone_takt_id,
         date_echeance: form.date_echeance || null,
-        // numero généré automatiquement par la DB (séquence ou trigger)
       })
+
+      // 2. Uploader la photo si présente
+      if (photoFile && created?.id) {
+        const path = `nc/${created.id}/${Date.now()}-${photoFile.name.replace(/\s+/g, '_')}`
+        const url = await uploadPhoto(photoFile, path)
+        await savePhoto({
+          nc_id: created.id,
+          task_id: null,
+          zone_takt_id: form.zone_takt_id,
+          url,
+          type: 'avant',
+          auteur_role: role ?? null,
+          legende: 'Photo de constat',
+        })
+      }
+
       onCreated()
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Erreur lors de la sauvegarde')
@@ -72,6 +115,23 @@ function NouvelleNcPanel({ onClose, onCreated }: { onClose: () => void; onCreate
 
   return (
     <>
+      {/* Inputs fichier cachés */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handlePhotoSelected}
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePhotoSelected}
+      />
+
       {/* Backdrop */}
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
       {/* Panel */}
@@ -155,6 +215,53 @@ function NouvelleNcPanel({ onClose, onCreated }: { onClose: () => void; onCreate
               onChange={e => setForm(f => ({ ...f, date_echeance: e.target.value }))}
             />
           </div>
+
+          {/* ── Photo de constat ─────────────────────────────── */}
+          <div>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Photo de constat</label>
+
+            {photoPreview ? (
+              /* Prévisualisation avec bouton supprimer */
+              <div className="mt-2 relative">
+                <img
+                  src={photoPreview}
+                  alt="Aperçu"
+                  className="w-full max-h-52 object-cover rounded-xl border border-gray-200"
+                />
+                <button
+                  onClick={handleRemovePhoto}
+                  className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full hover:bg-black/80 transition-colors"
+                >
+                  <X size={14} className="text-white" />
+                </button>
+                <p className="text-xs text-gray-400 mt-1.5 text-center">
+                  {photoFile?.name}
+                </p>
+              </div>
+            ) : (
+              /* Boutons prendre / choisir */
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-200
+                             text-sm font-medium text-gray-500 hover:border-nc-blue/40 hover:text-nc-blue hover:bg-blue-50/30 transition-all"
+                >
+                  <Camera size={18} />
+                  Prendre une photo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-200
+                             text-sm font-medium text-gray-500 hover:border-nc-blue/40 hover:text-nc-blue hover:bg-blue-50/30 transition-all"
+                >
+                  <ImageIcon size={18} />
+                  Choisir galerie
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -172,9 +279,9 @@ function NouvelleNcPanel({ onClose, onCreated }: { onClose: () => void; onCreate
             className="w-full btn-primary h-12 flex items-center justify-center gap-2 disabled:opacity-40"
           >
             {isSaving ? (
-              <><Loader2 size={18} className="animate-spin" />Enregistrement…</>
+              <><Loader2 size={18} className="animate-spin" />{photoFile ? 'Enregistrement + upload photo…' : 'Enregistrement…'}</>
             ) : (
-              <><Check size={18} />Créer la non-conformité</>
+              <><Check size={18} />Créer la non-conformité{photoFile ? ' + photo' : ''}</>
             )}
           </button>
         </div>
