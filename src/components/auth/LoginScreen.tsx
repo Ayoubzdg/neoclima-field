@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { HardHat, ChevronRight, Loader2, AlertCircle } from 'lucide-react'
+import { ChevronRight, Loader2, AlertCircle } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { getChantiers } from '@/lib/supabase'
 import type { Chantier } from '@/types/models'
@@ -59,11 +59,12 @@ export default function LoginScreen() {
     <div className="min-h-screen bg-nc-blue flex flex-col items-center justify-center p-6 safe-top">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <div className="w-16 h-16 bg-nc-red rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-          <HardHat size={32} className="text-white" />
-        </div>
-        <h1 className="text-white text-2xl font-bold tracking-tight">Neoclima</h1>
-        <p className="text-white/60 text-sm mt-1">Neoclima Field</p>
+        <img
+          src="/logo.png"
+          alt="Neoclima"
+          className="h-14 w-auto object-contain mx-auto mb-2 brightness-0 invert"
+        />
+        <p className="text-white/50 text-xs tracking-widest uppercase">Field</p>
       </div>
 
       {/* Card */}

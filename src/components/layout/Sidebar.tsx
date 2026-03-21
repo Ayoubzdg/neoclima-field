@@ -96,9 +96,13 @@ export default function Sidebar({ onNavClick }: Props) {
   return (
     <aside className="w-60 bg-white border-r border-gray-100 h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-4 border-b border-gray-100 bg-nc-blue flex-shrink-0">
-        <h1 className="text-white font-bold text-base">Neoclima Field</h1>
-        <p className="text-white/60 text-xs mt-0.5 truncate">{chantier?.name}</p>
+      <div className="px-4 py-3 border-b border-gray-100 bg-nc-blue flex-shrink-0">
+        <img
+          src="/logo.png"
+          alt="Neoclima"
+          className="h-8 w-auto object-contain brightness-0 invert mb-1"
+        />
+        <p className="text-white/60 text-xs truncate">{chantier?.name}</p>
       </div>
 
       {/* Navigation */}
