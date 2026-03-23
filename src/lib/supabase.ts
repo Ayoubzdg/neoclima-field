@@ -342,7 +342,7 @@ export async function getTasksByChantier(chantierId: string, filters?: {
 
   let query = supabase
     .from('tasks')
-    .select('*, equipe:equipes(*), zone_takt:zones_takt(*)')
+    .select('*, equipe:equipes(*), zone_takt:zones_takt(*, secteur:secteurs(*))')
     .in('zone_takt_id', zoneIds)
 
   if (filters?.semaine) query = query.eq('date_planifiee', filters.semaine)

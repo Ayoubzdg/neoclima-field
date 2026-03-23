@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { FileText, Download, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { FileText, Download, Loader2, ChevronLeft, ChevronRight, Presentation } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { getTasksByChantier, getEffectifs, getNonConformites } from '@/lib/supabase'
 import { calculerPPC, calculerAvancement, getPpcColor } from '@/utils/ppc'
 import { currentMondayISO, getSemaineLabel, addWeeks, formatDateISO } from '@/utils/dates'
 import ProgressBar from '@/components/ui/ProgressBar'
 import type { Task, Effectif, NonConformite } from '@/types/models'
+
+const RAPPORT_SERVICE_URL = import.meta.env.VITE_RAPPORT_SERVICE_URL ?? ''
 
 interface WeekStats {
   tasks: Task[]
@@ -27,6 +29,8 @@ export default function RapportHebdo() {
   const [stats, setStats] = useState<WeekStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isGeneratingClient, setIsGeneratingClient] = useState(false)
+  const [clientError, setClientError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!chantier?.id) return
@@ -58,6 +62,148 @@ export default function RapportHebdo() {
 
   const navigateSemaine = (dir: -1 | 1) => {
     setSemaine(s => formatDateISO(addWeeks(new Date(s), dir)))
+  }
+
+  const handleExportRapportClient = async () => {
+    if (!stats || !chantier) return
+    if (!RAPPORT_SERVICE_URL) {
+      setClientError('VITE_RAPPORT_SERVICE_URL non configuré dans .env')
+      return
+    }
+    setIsGeneratingClient(true)
+    setClientError(null)
+    try {
+      // ── Fetch ALL tasks du chantier (pas filtré par semaine) pour avancement réel ──
+      const allTasks = await getTasksByChantier(chantier.id)
+
+      const semaineLabel = getSemaineLabel(semaine)
+      const dateStr = new Date().toLocaleDateString('fr-FR', {
+        day: '2-digit', month: 'long', year: 'numeric'
+      })
+
+      // ── Avancement global calculé sur toutes les tâches ──
+      const avanGlobal = calculerAvancement(allTasks)
+
+      // ── Avancement par zone — depuis toutes les tâches, regroupées par zone ──
+      const zoneMap = new Map<string, { done: number; total: number; batiment: string; niveau: string; hasBlocked: boolean }>()
+      for (const t of allTasks) {
+        const zoneName = t.zone_takt?.name ?? 'Zone'
+        // secteur.name grâce au join zone_takt:zones_takt(*, secteur:secteurs(*))
+        const secteurName = (t.zone_takt as any)?.secteur?.name ?? chantier.name
+        if (!zoneMap.has(zoneName)) {
+          zoneMap.set(zoneName, { done: 0, total: 0, batiment: secteurName, niveau: zoneName, hasBlocked: false })
+        }
+        const z = zoneMap.get(zoneName)!
+        z.total += 1
+        if (t.status === 'done') z.done += 1
+        if (t.status === 'blocked') z.hasBlocked = true
+      }
+      const zones = Array.from(zoneMap.values()).map(z => {
+        const pct = z.total > 0 ? Math.round((z.done / z.total) * 100) : 0
+        const statut = pct === 100 ? 'green'
+          : z.hasBlocked ? 'red'
+          : pct > 30 ? 'amber' : 'grey'
+        return { batiment: z.batiment, niveau: z.niveau, avancement: pct, statut, commentaire: '' }
+      })
+
+      // ── Équipes depuis effectifs + détection ST vs Interne ──
+      const equipesMap = new Map<string, { nom: string; effectif: number; type: string; secteurs: string }>()
+      for (const e of stats.effectifs) {
+        const nom = e.equipe?.name ?? 'Équipe'
+        if (!equipesMap.has(nom)) {
+          const isST = nom.includes('ST') || nom.toLowerCase().includes('sous-trait') ||
+            nom.includes('SA') || nom.includes('Sàrl') || nom.includes('GmbH') || nom.includes('AG')
+          equipesMap.set(nom, { nom, effectif: 0, type: isST ? 'Sous-traitant' : 'Interne', secteurs: '' })
+        }
+        equipesMap.get(nom)!.effectif += e.monteurs_presents
+      }
+      const equipes = Array.from(equipesMap.values())
+
+      // ── Vigilances = tâches bloquées de la semaine ──
+      const vigilances = stats.blocages.map(t => ({
+        zone: t.zone_takt?.name ?? '—',
+        sujet: t.label,
+        action: (t as any).comment ?? 'Coordination en cours. Solution identifiée.',
+        impact: 'Suivi en cours — impact planning maîtrisé',
+      }))
+
+      // ── Semaines restantes depuis date_fin_prev du chantier ──
+      const dateFinPrev = (chantier as any).date_fin_prev
+      let semainesRestantes = 0
+      if (dateFinPrev) {
+        const fin = new Date(dateFinPrev)
+        const now = new Date()
+        semainesRestantes = Math.max(0, Math.round((fin.getTime() - now.getTime()) / (7 * 24 * 3600 * 1000)))
+      }
+
+      // ── Prochaines étapes : zones planifiées non démarrées ──
+      const prochainesZones = zones
+        .filter(z => z.statut === 'grey' || (z.avancement > 0 && z.avancement < 80))
+        .slice(0, 5)
+      const prochaines_etapes = prochainesZones.map((z, i) => ({
+        date: `S+${i + 1}`,
+        titre: `${z.batiment} — ${z.niveau}`,
+        detail: z.avancement > 0
+          ? `Finalisation en cours (${z.avancement}%) — objectif réception prochaine semaine`
+          : 'Démarrage planifié — équipes mobilisées et approvisionnements confirmés',
+      }))
+
+      const nbVigilances = vigilances.length
+      const statut_global =
+        avanGlobal >= 80 ? 'MAÎTRISÉ' :
+        nbVigilances === 0 ? 'MAÎTRISÉ' :
+        nbVigilances <= 2 ? 'SOUS SURVEILLANCE' : 'CRITIQUE'
+
+      const ppcSemaine = stats.ppc !== null ? `${stats.ppc}%` : '—'
+
+      const payload = {
+        project: {
+          nom: chantier.name,
+          client: chantier.client ?? 'Maître d\'ouvrage',
+          adresse: (chantier as any).adresse ?? '',
+          semaine: semaineLabel,
+          date: dateStr,
+          statut_global,
+          avancement_global: Math.round(avanGlobal),
+          semaines_restantes: semainesRestantes,
+          phrase: `Le chantier progresse avec un PPC de ${ppcSemaine}. ${
+            nbVigilances > 0
+              ? `${nbVigilances} point${nbVigilances > 1 ? 's' : ''} de coordination actif${nbVigilances > 1 ? 's' : ''}, tous maîtrisés.`
+              : 'Aucun point de vigilance.'
+          } Le planning global reste tenu.`,
+        },
+        zones,
+        equipes,
+        vigilances,
+        prochaines_etapes,
+        faits_marquants: [],
+      }
+
+      const response = await fetch(`${RAPPORT_SERVICE_URL}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail ?? `Erreur serveur ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Rapport_Client_${chantier.name.replace(/\s+/g, '_')}_${semaine}.pptx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur inconnue'
+      setClientError(msg)
+      console.error('Erreur rapport client:', err)
+    } finally {
+      setIsGeneratingClient(false)
+    }
   }
 
   const handleGeneratePDF = async () => {
@@ -227,6 +373,31 @@ export default function RapportHebdo() {
             </div>
           )}
 
+          {/* Rapport Client Premium — microservice PPTX */}
+          {RAPPORT_SERVICE_URL && (
+            <div className="mb-3">
+              <button
+                onClick={handleExportRapportClient}
+                disabled={isGeneratingClient}
+                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl font-semibold text-white"
+                style={{ background: isGeneratingClient ? '#64748B' : 'linear-gradient(135deg, #0F1722 0%, #1A2638 100%)' }}
+              >
+                {isGeneratingClient ? (
+                  <><Loader2 size={18} className="animate-spin" />Génération rapport client…</>
+                ) : (
+                  <><Presentation size={18} />Rapport Client — Export PPTX</>
+                )}
+              </button>
+              {clientError && (
+                <p className="text-xs text-red-500 mt-1 text-center">{clientError}</p>
+              )}
+              <p className="text-xs text-gray-400 text-center mt-1">
+                Format maître d'ouvrage · Premium · 7 slides
+              </p>
+            </div>
+          )}
+
+          {/* Rapport interne PDF */}
           <button
             onClick={handleGeneratePDF}
             disabled={isGenerating}
@@ -235,7 +406,7 @@ export default function RapportHebdo() {
             {isGenerating ? (
               <><Loader2 size={18} className="animate-spin" />Génération en cours…</>
             ) : (
-              <><Download size={18} />Exporter en PDF</>
+              <><Download size={18} />Rapport Interne — Export PDF</>
             )}
           </button>
           <p className="text-xs text-gray-400 text-center mt-2">Format A4 · Logo Neoclima</p>
