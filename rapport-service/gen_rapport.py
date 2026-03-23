@@ -3,6 +3,7 @@ Neoclima Field — Moteur de génération PPTX dynamique
 Rapport client maître d'ouvrage — design exécutif premium
 """
 import io
+import os
 from itertools import groupby
 from PIL import Image
 from pptx import Presentation
