@@ -374,28 +374,26 @@ export default function RapportHebdo() {
           )}
 
           {/* Rapport Client Premium — microservice PPTX */}
-          {RAPPORT_SERVICE_URL && (
-            <div className="mb-3">
-              <button
-                onClick={handleExportRapportClient}
-                disabled={isGeneratingClient}
-                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl font-semibold text-white"
-                style={{ background: isGeneratingClient ? '#64748B' : 'linear-gradient(135deg, #0F1722 0%, #1A2638 100%)' }}
-              >
-                {isGeneratingClient ? (
-                  <><Loader2 size={18} className="animate-spin" />Génération rapport client…</>
-                ) : (
-                  <><Presentation size={18} />Rapport Client — Export PPTX</>
-                )}
-              </button>
-              {clientError && (
-                <p className="text-xs text-red-500 mt-1 text-center">{clientError}</p>
+          <div className="mb-3">
+            <button
+              onClick={handleExportRapportClient}
+              disabled={isGeneratingClient}
+              className="w-full flex items-center justify-center gap-2 h-12 rounded-xl font-semibold text-white"
+              style={{ background: isGeneratingClient ? '#64748B' : 'linear-gradient(135deg, #0F1722 0%, #1A2638 100%)' }}
+            >
+              {isGeneratingClient ? (
+                <><Loader2 size={18} className="animate-spin" />Génération rapport client…</>
+              ) : (
+                <><Presentation size={18} />Rapport Client — Export PPTX</>
               )}
-              <p className="text-xs text-gray-400 text-center mt-1">
-                Format maître d'ouvrage · Premium · 7 slides
-              </p>
-            </div>
-          )}
+            </button>
+            {clientError && (
+              <p className="text-xs text-red-500 mt-1 text-center">{clientError}</p>
+            )}
+            <p className="text-xs text-gray-400 text-center mt-1">
+              Format maître d'ouvrage · Premium · 7 slides
+            </p>
+          </div>
 
           {/* Rapport interne PDF */}
           <button
