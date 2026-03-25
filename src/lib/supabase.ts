@@ -766,6 +766,83 @@ export async function getAvancementChantier(chantierId: string): Promise<VueAvan
   return (data ?? []) as VueAvancementZone[]
 }
 
+// ── CRÉATION CHANTIER COMPLET ───────────────────────────────
+
+export interface NouveauChantierPayload {
+  nom: string
+  adresse: string
+  client: string
+  date_debut: string
+  date_fin_prev: string
+  budget_heures: number
+  takt_duree: number
+  pin_monteur: string
+  pin_chef: string
+  pin_ca: string
+  pin_admin: string
+}
+
+export async function createChantierComplet(payload: NouveauChantierPayload): Promise<Chantier> {
+  // 1. Créer le chantier
+  const { data: ch, error: chErr } = await supabase
+    .from('chantiers')
+    .insert({
+      name: payload.nom,
+      adresse: payload.adresse,
+      client: payload.client,
+      date_debut: payload.date_debut,
+      date_fin_prev: payload.date_fin_prev,
+      budget_heures: payload.budget_heures,
+      takt_duree: payload.takt_duree,
+      statut: 'actif'
+    })
+    .select()
+    .single()
+  if (chErr) handleError(chErr, 'createChantier')
+  const chantier = ch as Chantier
+
+  // 2. Créer 2 équipes par défaut
+  const { data: equipes, error: eqErr } = await supabase
+    .from('equipes')
+    .insert([
+      { chantier_id: chantier.id, name: 'Neoclima — Équipe A', couleur: '#2563EB', code_pin: '1100', actif: true },
+      { chantier_id: chantier.id, name: 'Sous-traitant montage', couleur: '#D97706', code_pin: '1200', actif: true }
+    ])
+    .select()
+  if (eqErr) handleError(eqErr, 'createEquipes')
+  const eqA = (equipes as Equipe[])[0]
+
+  // 3. Créer les utilisateurs de base
+  const { error: usErr } = await supabase
+    .from('utilisateurs')
+    .insert([
+      { chantier_id: chantier.id, equipe_id: eqA.id, nom: 'Monteur', prenom: 'Principal', role: 'monteur', code_pin: payload.pin_monteur, actif: true },
+      { chantier_id: chantier.id, equipe_id: eqA.id, nom: 'Chef', prenom: 'Chantier', role: 'chef', code_pin: payload.pin_chef, actif: true },
+      { chantier_id: chantier.id, equipe_id: null, nom: 'Chargé', prenom: "d'Affaires", role: 'ca', code_pin: payload.pin_ca, actif: true },
+      { chantier_id: chantier.id, equipe_id: null, nom: 'Admin', prenom: 'Système', role: 'admin', code_pin: payload.pin_admin, actif: true }
+    ])
+  if (usErr) handleError(usErr, 'createUtilisateurs')
+
+  // 4. Créer les types de tâches CVC par défaut
+  const { error: ttErr } = await supabase
+    .from('task_types')
+    .insert([
+      { chantier_id: chantier.id, name: 'Gaine rectangulaire', unite: 'ml', rendement: 12.0, cout_unitaire: 45.0 },
+      { chantier_id: chantier.id, name: 'Gaine circulaire', unite: 'ml', rendement: 18.0, cout_unitaire: 35.0 },
+      { chantier_id: chantier.id, name: 'Gaine spiralée', unite: 'ml', rendement: 20.0, cout_unitaire: 30.0 },
+      { chantier_id: chantier.id, name: 'Isolation gaine rect.', unite: 'ml', rendement: 10.0, cout_unitaire: 25.0 },
+      { chantier_id: chantier.id, name: 'Isolation tuyauterie', unite: 'ml', rendement: 15.0, cout_unitaire: 22.0 },
+      { chantier_id: chantier.id, name: 'Ventilo-convecteur', unite: 'pce', rendement: 4.0, cout_unitaire: 120.0 },
+      { chantier_id: chantier.id, name: 'Extracteur', unite: 'pce', rendement: 6.0, cout_unitaire: 95.0 },
+      { chantier_id: chantier.id, name: 'Raccordement hydraulique', unite: 'pce', rendement: 3.0, cout_unitaire: 80.0 },
+      { chantier_id: chantier.id, name: 'CTA installation', unite: 'pce', rendement: 0.5, cout_unitaire: 800.0 },
+      { chantier_id: chantier.id, name: 'VRV / Split', unite: 'pce', rendement: 2.0, cout_unitaire: 200.0 }
+    ])
+  if (ttErr) handleError(ttErr, 'createTaskTypes')
+
+  return chantier
+}
+
 // ── SYNC QUEUE ──────────────────────────────────────────────
 
 export async function flushSyncQueue(items: SyncQueueItem[]): Promise<void> {
