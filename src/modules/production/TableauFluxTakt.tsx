@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import {
   getAllCyclesByChantier, getZonesByChantier, upsertCycle,
-  getTasksByCycle, upsertTask, deleteTask, getEquipes, getTasksByChantier
+  getTasksByCycle, upsertTask, deleteTask, getEquipes, getTasksByChantier,
+  getTaskTypes
 } from '@/lib/supabase'
 import { buildTaktFlux, getTaktCellBg } from '@/utils/takt'
 import { getSemaineLabel } from '@/utils/dates'
-import type { CycleTakt, ZoneTakt, Task, Equipe } from '@/types/models'
+import type { CycleTakt, ZoneTakt, Task, Equipe, TaskType } from '@/types/models'
 import StatusBadge from '@/components/ui/StatusBadge'
 import AlertesBanner from '@/components/ui/AlertesBanner'
 import { X, Plus, Trash2, CheckCircle, Clock, Loader2, Pencil } from 'lucide-react'
@@ -37,6 +38,7 @@ function CycleEditModal({
   onRefresh: () => void
 }) {
   const { zone, semaine } = cell
+  const { chantier } = useAuthStore()
 
   // État local du cycle (peut changer si on vient d'en créer un)
   const [cycle, setCycle] = useState<CycleTakt | null>(cell.cycle)
@@ -49,13 +51,29 @@ function CycleEditModal({
   const [noteChef, setNoteChef] = useState(cell.cycle?.note_chef ?? '')
   const [saveOk, setSaveOk] = useState(false)
 
+  // Types de tâches pré-enregistrés
+  const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
+  useEffect(() => {
+    if (!chantier?.id) return
+    getTaskTypes(chantier.id).then(setTaskTypes)
+  }, [chantier?.id])
+
   // Formulaire ajout tâche
   const [showTaskForm, setShowTaskForm] = useState(false)
   const [taskForm, setTaskForm] = useState({
-    label: '', equipe_id: '', qte_prevue: '1', unite: 'u', heures_prevues: '4'
+    task_type_id: '', label: '', equipe_id: '',
+    qte_prevue: '1', unite: 'pce', heures_prevues: ''
   })
   const [taskSaving, setTaskSaving] = useState(false)
   const [taskError, setTaskError] = useState<string | null>(null)
+
+  // Recalcule les heures quand on change la quantité (si un type est sélectionné)
+  const selectedType = taskTypes.find(t => t.id === taskForm.task_type_id)
+  const recalcHeures = (qte: string, type?: TaskType) => {
+    const t = type ?? selectedType
+    if (!t?.rendement || !qte) return ''
+    return String(Math.round((parseFloat(qte) / t.rendement) * 100) / 100)
+  }
 
   const semaineLabel = getSemaineLabel(semaine)
 
@@ -111,20 +129,21 @@ function CycleEditModal({
       const newTask = await upsertTask({
         cycle_id: cycle.id,
         zone_takt_id: zone.id,
+        task_type_id: taskForm.task_type_id || null,
         label: taskForm.label.trim(),
         equipe_id: taskForm.equipe_id || null,
         qte_prevue: parseFloat(taskForm.qte_prevue) || 1,
         qte_realisee: 0,
-        unite: taskForm.unite || 'u',
-        heures_prevues: parseFloat(taskForm.heures_prevues) || 4,
+        unite: taskForm.unite || 'pce',
+        heures_prevues: parseFloat(taskForm.heures_prevues) || 0,
         heures_realisees: 0,
         status: 'todo',
         date_planifiee: semaine,
         engage: false,
-        cout_unitaire: 0,
+        cout_unitaire: selectedType?.cout_unitaire ?? 0,
       })
       setTasks(prev => [...prev, newTask])
-      setTaskForm({ label: '', equipe_id: '', qte_prevue: '1', unite: 'u', heures_prevues: '4' })
+      setTaskForm({ task_type_id: '', label: '', equipe_id: '', qte_prevue: '1', unite: 'pce', heures_prevues: '' })
       setShowTaskForm(false)
     } finally {
       setTaskSaving(false)
@@ -260,24 +279,69 @@ function CycleEditModal({
                 {/* Formulaire ajout tâche */}
                 {showTaskForm && (
                   <div className="border border-dashed border-nc-blue/30 rounded-xl p-3.5 mb-3 space-y-2.5 bg-blue-50/40">
+
+                    {/* ── Sélection type pré-enregistré ── */}
+                    {taskTypes.length > 0 && (
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                          Type de tâche pré-enregistré
+                        </label>
+                        <select
+                          value={taskForm.task_type_id}
+                          onChange={e => {
+                            const id = e.target.value
+                            const type = taskTypes.find(t => t.id === id)
+                            setTaskForm(f => ({
+                              ...f,
+                              task_type_id: id,
+                              label: type ? type.name : f.label,
+                              unite: type ? type.unite : f.unite,
+                              heures_prevues: recalcHeures(f.qte_prevue, type),
+                            }))
+                          }}
+                          className="mt-0.5 w-full border border-nc-blue/30 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/30 bg-white font-medium"
+                        >
+                          <option value="">— Choisir un type ou saisir manuellement —</option>
+                          {taskTypes.map(tt => (
+                            <option key={tt.id} value={tt.id}>
+                              {tt.name}{tt.rendement ? ` — ${Math.round(tt.rendement * 16 * 10) / 10} ${tt.unite}/j·éq.` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedType && (
+                          <p className="text-[10px] text-nc-blue mt-1 bg-blue-100/50 rounded px-2 py-1">
+                            {selectedType.name} · {selectedType.unite}
+                            {selectedType.rendement && ` · ${selectedType.rendement} ${selectedType.unite}/h/monteur`}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Libellé (pré-rempli ou libre) ── */}
                     <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Libellé *</label>
                       <input
                         value={taskForm.label}
                         onChange={e => setTaskForm(f => ({ ...f, label: e.target.value }))}
-                        placeholder="Libellé de la tâche *"
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/30"
+                        placeholder="Libellé de la tâche"
+                        className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/30"
                         onKeyDown={e => { if (e.key === 'Enter') handleAddTask() }}
                       />
                       {taskError && <p className="text-red-500 text-xs mt-1">{taskError}</p>}
                     </div>
 
+                    {/* ── Quantité / Unité / Heures ── */}
                     <div className="grid grid-cols-3 gap-2">
                       <div>
                         <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Qté prévue</label>
                         <input
-                          type="number" min="0" step="0.5"
+                          type="number" min="0" step="1"
                           value={taskForm.qte_prevue}
-                          onChange={e => setTaskForm(f => ({ ...f, qte_prevue: e.target.value }))}
+                          onChange={e => setTaskForm(f => ({
+                            ...f,
+                            qte_prevue: e.target.value,
+                            heures_prevues: recalcHeures(e.target.value),
+                          }))}
                           className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none"
                         />
                       </div>
@@ -286,21 +350,37 @@ function CycleEditModal({
                         <input
                           value={taskForm.unite}
                           onChange={e => setTaskForm(f => ({ ...f, unite: e.target.value }))}
-                          placeholder="u"
+                          placeholder="pce"
                           className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Heures</label>
+                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                          Heures {selectedType?.rendement ? '(calculé)' : ''}
+                        </label>
                         <input
                           type="number" min="0" step="0.5"
                           value={taskForm.heures_prevues}
                           onChange={e => setTaskForm(f => ({ ...f, heures_prevues: e.target.value }))}
-                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none"
+                          placeholder={selectedType?.rendement ? 'Auto' : '0'}
+                          className={`w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none ${
+                            selectedType?.rendement
+                              ? 'border-nc-blue/20 bg-blue-50/40 text-nc-blue'
+                              : 'border-gray-200'
+                          }`}
                         />
                       </div>
                     </div>
 
+                    {/* ── Info heures calculées ── */}
+                    {selectedType?.rendement && taskForm.qte_prevue && taskForm.heures_prevues && (
+                      <p className="text-[10px] text-gray-500 bg-gray-50 rounded px-2 py-1">
+                        {taskForm.qte_prevue} {selectedType.unite} ÷ {selectedType.rendement} {selectedType.unite}/h·mont.
+                        = <strong>{taskForm.heures_prevues}h</strong> par monteur
+                      </p>
+                    )}
+
+                    {/* ── Équipe ── */}
                     <div>
                       <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Équipe assignée</label>
                       <select
@@ -322,7 +402,7 @@ function CycleEditModal({
                         className="flex-1 py-2 bg-nc-blue text-white rounded-lg text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-1.5"
                       >
                         {taskSaving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                        Ajouter
+                        Ajouter la tâche
                       </button>
                       <button
                         onClick={() => { setShowTaskForm(false); setTaskError(null) }}
