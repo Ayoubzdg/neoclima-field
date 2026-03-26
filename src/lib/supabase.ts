@@ -823,21 +823,65 @@ export async function createChantierComplet(payload: NouveauChantierPayload): Pr
     ])
   if (usErr) handleError(usErr, 'createUtilisateurs')
 
-  // 4. Créer les types de tâches CVC par défaut
+  // 4. Créer les types de tâches CVC (liste projet réelle)
+  const taskTypesList = [
+    // ── Appareils ──────────────────────────────────────────────────────
+    { name: 'Ventilo-convecteur',                                      unite: 'pce', rendement: 6 },
+    // ── Conduites ─────────────────────────────────────────────────────
+    { name: 'Gaine galvanisée',                                        unite: 'ml',  rendement: 400 },
+    { name: 'Canaux circulaires galva perforé',                        unite: 'pce', rendement: 45 },
+    { name: 'Canaux circulaires SAFE galva',                           unite: 'pce', rendement: 45 },
+    { name: 'Accessoires canaux circulaires SAFE galva',               unite: 'pce', rendement: 45 },
+    { name: 'Conduites inox V2A',                                      unite: 'ml',  rendement: 250 },
+    { name: 'Canaux circulaires SAFE inox V2A',                        unite: 'pce', rendement: 90 },
+    { name: 'Accessoires canaux circulaires SAFE inox V2A',            unite: 'pce', rendement: 45 },
+    { name: 'Gaine de désenfumage',                                    unite: 'pce', rendement: 45 },
+    // ── Accessoires ───────────────────────────────────────────────────
+    { name: "Diffusion d'air par gaines textiles",                     unite: 'pce', rendement: 6 },
+    { name: 'Amortisseur de bruit quadratique',                        unite: 'pce', rendement: 45 },
+    { name: 'Amortisseur de bruit circulaire',                         unite: 'pce', rendement: 45 },
+    { name: 'Amortisseur de bruit quad. (pulsion VCF)',                unite: 'pce', rendement: 45 },
+    { name: 'Silencieux circulaire galva',                             unite: 'pce', rendement: 45 },
+    { name: 'Clapet de réglage manuel rectangulaire',                  unite: 'pce', rendement: 45 },
+    { name: 'Clapet de réglage manuel circulaire',                     unite: 'pce', rendement: 45 },
+    { name: 'Registre à iris',                                         unite: 'pce', rendement: 45 },
+    { name: 'Régulateur de débits constants circulaire',               unite: 'pce', rendement: 45 },
+    { name: 'Diffuseur linéaire à fentes — pulsion',                   unite: 'pce', rendement: 20 },
+    { name: "Grilles de diffusion d'air",                              unite: 'pce', rendement: 45 },
+    { name: "Caisson pour grilles de pulsion d'air",                   unite: 'pce', rendement: 45 },
+    { name: 'Diffuseur plafond hélicoïdal zone admin',                 unite: 'pce', rendement: 20 },
+    { name: 'Module de soufflage laminaire',                           unite: 'pce', rendement: 45 },
+    { name: "Grilles de reprise d'air",                                unite: 'pce', rendement: 45 },
+    { name: "Caisson grilles de reprise d'air avec piquage",           unite: 'pce', rendement: 45 },
+    { name: 'Diffuseur linéaire à fentes — reprise',                   unite: 'pce', rendement: 20 },
+    { name: 'Raccord flexible',                                        unite: 'pce', rendement: 45 },
+    { name: 'Soupape',                                                 unite: 'pce', rendement: 45 },
+    { name: 'Fond grillagé',                                           unite: 'pce', rendement: 45 },
+    { name: 'Portillon de révision rect. GALVA',                       unite: 'pce', rendement: 45 },
+    { name: 'Grille compensation désenfumage plateau production',      unite: 'pce', rendement: 45 },
+    { name: 'Portillon de révision rect. GALVA > +70°C',               unite: 'pce', rendement: 45 },
+    { name: 'Portillon de révision rect. GALVA étanche',               unite: 'pce', rendement: 45 },
+    { name: 'Portillon de révision rect. GALVA isolé',                 unite: 'pce', rendement: 45 },
+    { name: 'Portillon de révision GALVA circulaire',                  unite: 'pce', rendement: 45 },
+    { name: 'Portillon de révision rect. V4A',                         unite: 'pce', rendement: 45 },
+    { name: 'Plaquette indicatrice autocollante',                      unite: 'pce', rendement: 200 },
+    { name: 'Bouchon',                                                 unite: 'pce', rendement: 1000 },
+    // ── Organes de régulation ─────────────────────────────────────────
+    { name: 'VAV rectangulaire galva',                                 unite: 'pce', rendement: 45 },
+    { name: 'VAV circulaire galva',                                    unite: 'pce', rendement: 45 },
+    { name: 'CCF rectangulaire GALVA',                                 unite: 'pce', rendement: 8 },
+    { name: 'Kit de montage CCF pour parois légères',                  unite: 'pce', rendement: 8 },
+    { name: 'CCF circulaire GALVA',                                    unite: 'pce', rendement: 8 },
+    { name: 'Clapets de désenfumage',                                  unite: 'pce', rendement: 8 },
+    { name: 'Clapets de fermeture V4A 600°C',                         unite: 'pce', rendement: 8 },
+    { name: 'Régulateur de débit constant mécanique circulaire',       unite: 'pce', rendement: 45 },
+    { name: 'VAV rectangulaire V2A',                                   unite: 'pce', rendement: 45 },
+    { name: 'Clapets de fermeture galva',                              unite: 'pce', rendement: 45 },
+    { name: 'Pose des périphériques',                                  unite: 'pce', rendement: 45 },
+  ]
   const { error: ttErr } = await supabase
     .from('task_types')
-    .insert([
-      { chantier_id: chantier.id, name: 'Gaine rectangulaire', unite: 'ml', rendement: 12.0, cout_unitaire: 45.0 },
-      { chantier_id: chantier.id, name: 'Gaine circulaire', unite: 'ml', rendement: 18.0, cout_unitaire: 35.0 },
-      { chantier_id: chantier.id, name: 'Gaine spiralée', unite: 'ml', rendement: 20.0, cout_unitaire: 30.0 },
-      { chantier_id: chantier.id, name: 'Isolation gaine rect.', unite: 'ml', rendement: 10.0, cout_unitaire: 25.0 },
-      { chantier_id: chantier.id, name: 'Isolation tuyauterie', unite: 'ml', rendement: 15.0, cout_unitaire: 22.0 },
-      { chantier_id: chantier.id, name: 'Ventilo-convecteur', unite: 'pce', rendement: 4.0, cout_unitaire: 120.0 },
-      { chantier_id: chantier.id, name: 'Extracteur', unite: 'pce', rendement: 6.0, cout_unitaire: 95.0 },
-      { chantier_id: chantier.id, name: 'Raccordement hydraulique', unite: 'pce', rendement: 3.0, cout_unitaire: 80.0 },
-      { chantier_id: chantier.id, name: 'CTA installation', unite: 'pce', rendement: 0.5, cout_unitaire: 800.0 },
-      { chantier_id: chantier.id, name: 'VRV / Split', unite: 'pce', rendement: 2.0, cout_unitaire: 200.0 }
-    ])
+    .insert(taskTypesList.map(t => ({ ...t, chantier_id: chantier.id, cout_unitaire: 0 })))
   if (ttErr) handleError(ttErr, 'createTaskTypes')
 
   return chantier
