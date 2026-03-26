@@ -823,61 +823,62 @@ export async function createChantierComplet(payload: NouveauChantierPayload): Pr
     ])
   if (usErr) handleError(usErr, 'createUtilisateurs')
 
-  // 4. Créer les types de tâches CVC (liste projet réelle)
+  // 4. Créer les types de tâches CVC — rendement en pce/h/monteur
+  // Conversion : pcs_par_jour / (2 monteurs × 8h) = pcs_par_jour / 16
   const taskTypesList = [
     // ── Appareils ──────────────────────────────────────────────────────
-    { name: 'Ventilo-convecteur',                                      unite: 'pce', rendement: 6 },
+    { name: 'Ventilo-convecteur',                                      unite: 'pce', rendement: 0.375  }, //   6 pcs/j ÷ 16
     // ── Conduites ─────────────────────────────────────────────────────
-    { name: 'Gaine galvanisée',                                        unite: 'ml',  rendement: 400 },
-    { name: 'Canaux circulaires galva perforé',                        unite: 'pce', rendement: 45 },
-    { name: 'Canaux circulaires SAFE galva',                           unite: 'pce', rendement: 45 },
-    { name: 'Accessoires canaux circulaires SAFE galva',               unite: 'pce', rendement: 45 },
-    { name: 'Conduites inox V2A',                                      unite: 'ml',  rendement: 250 },
-    { name: 'Canaux circulaires SAFE inox V2A',                        unite: 'pce', rendement: 90 },
-    { name: 'Accessoires canaux circulaires SAFE inox V2A',            unite: 'pce', rendement: 45 },
-    { name: 'Gaine de désenfumage',                                    unite: 'pce', rendement: 45 },
+    { name: 'Gaine galvanisée',                                        unite: 'ml',  rendement: 25     }, // 400 ml/j  ÷ 16
+    { name: 'Canaux circulaires galva perforé',                        unite: 'pce', rendement: 2.8125 }, //  45 pcs/j ÷ 16
+    { name: 'Canaux circulaires SAFE galva',                           unite: 'pce', rendement: 2.8125 },
+    { name: 'Accessoires canaux circulaires SAFE galva',               unite: 'pce', rendement: 2.8125 },
+    { name: 'Conduites inox V2A',                                      unite: 'ml',  rendement: 15.625 }, // 250 ml/j  ÷ 16
+    { name: 'Canaux circulaires SAFE inox V2A',                        unite: 'pce', rendement: 5.625  }, //  90 pcs/j ÷ 16
+    { name: 'Accessoires canaux circulaires SAFE inox V2A',            unite: 'pce', rendement: 2.8125 },
+    { name: 'Gaine de désenfumage',                                    unite: 'pce', rendement: 2.8125 },
     // ── Accessoires ───────────────────────────────────────────────────
-    { name: "Diffusion d'air par gaines textiles",                     unite: 'pce', rendement: 6 },
-    { name: 'Amortisseur de bruit quadratique',                        unite: 'pce', rendement: 45 },
-    { name: 'Amortisseur de bruit circulaire',                         unite: 'pce', rendement: 45 },
-    { name: 'Amortisseur de bruit quad. (pulsion VCF)',                unite: 'pce', rendement: 45 },
-    { name: 'Silencieux circulaire galva',                             unite: 'pce', rendement: 45 },
-    { name: 'Clapet de réglage manuel rectangulaire',                  unite: 'pce', rendement: 45 },
-    { name: 'Clapet de réglage manuel circulaire',                     unite: 'pce', rendement: 45 },
-    { name: 'Registre à iris',                                         unite: 'pce', rendement: 45 },
-    { name: 'Régulateur de débits constants circulaire',               unite: 'pce', rendement: 45 },
-    { name: 'Diffuseur linéaire à fentes — pulsion',                   unite: 'pce', rendement: 20 },
-    { name: "Grilles de diffusion d'air",                              unite: 'pce', rendement: 45 },
-    { name: "Caisson pour grilles de pulsion d'air",                   unite: 'pce', rendement: 45 },
-    { name: 'Diffuseur plafond hélicoïdal zone admin',                 unite: 'pce', rendement: 20 },
-    { name: 'Module de soufflage laminaire',                           unite: 'pce', rendement: 45 },
-    { name: "Grilles de reprise d'air",                                unite: 'pce', rendement: 45 },
-    { name: "Caisson grilles de reprise d'air avec piquage",           unite: 'pce', rendement: 45 },
-    { name: 'Diffuseur linéaire à fentes — reprise',                   unite: 'pce', rendement: 20 },
-    { name: 'Raccord flexible',                                        unite: 'pce', rendement: 45 },
-    { name: 'Soupape',                                                 unite: 'pce', rendement: 45 },
-    { name: 'Fond grillagé',                                           unite: 'pce', rendement: 45 },
-    { name: 'Portillon de révision rect. GALVA',                       unite: 'pce', rendement: 45 },
-    { name: 'Grille compensation désenfumage plateau production',      unite: 'pce', rendement: 45 },
-    { name: 'Portillon de révision rect. GALVA > +70°C',               unite: 'pce', rendement: 45 },
-    { name: 'Portillon de révision rect. GALVA étanche',               unite: 'pce', rendement: 45 },
-    { name: 'Portillon de révision rect. GALVA isolé',                 unite: 'pce', rendement: 45 },
-    { name: 'Portillon de révision GALVA circulaire',                  unite: 'pce', rendement: 45 },
-    { name: 'Portillon de révision rect. V4A',                         unite: 'pce', rendement: 45 },
-    { name: 'Plaquette indicatrice autocollante',                      unite: 'pce', rendement: 200 },
-    { name: 'Bouchon',                                                 unite: 'pce', rendement: 1000 },
+    { name: "Diffusion d'air par gaines textiles",                     unite: 'pce', rendement: 0.375  }, //   6 pcs/j ÷ 16
+    { name: 'Amortisseur de bruit quadratique',                        unite: 'pce', rendement: 2.8125 },
+    { name: 'Amortisseur de bruit circulaire',                         unite: 'pce', rendement: 2.8125 },
+    { name: 'Amortisseur de bruit quad. (pulsion VCF)',                unite: 'pce', rendement: 2.8125 },
+    { name: 'Silencieux circulaire galva',                             unite: 'pce', rendement: 2.8125 },
+    { name: 'Clapet de réglage manuel rectangulaire',                  unite: 'pce', rendement: 2.8125 },
+    { name: 'Clapet de réglage manuel circulaire',                     unite: 'pce', rendement: 2.8125 },
+    { name: 'Registre à iris',                                         unite: 'pce', rendement: 2.8125 },
+    { name: 'Régulateur de débits constants circulaire',               unite: 'pce', rendement: 2.8125 },
+    { name: 'Diffuseur linéaire à fentes — pulsion',                   unite: 'pce', rendement: 1.25   }, //  20 pcs/j ÷ 16
+    { name: "Grilles de diffusion d'air",                              unite: 'pce', rendement: 2.8125 },
+    { name: "Caisson pour grilles de pulsion d'air",                   unite: 'pce', rendement: 2.8125 },
+    { name: 'Diffuseur plafond hélicoïdal zone admin',                 unite: 'pce', rendement: 1.25   },
+    { name: 'Module de soufflage laminaire',                           unite: 'pce', rendement: 2.8125 },
+    { name: "Grilles de reprise d'air",                                unite: 'pce', rendement: 2.8125 },
+    { name: "Caisson grilles de reprise d'air avec piquage",           unite: 'pce', rendement: 2.8125 },
+    { name: 'Diffuseur linéaire à fentes — reprise',                   unite: 'pce', rendement: 1.25   },
+    { name: 'Raccord flexible',                                        unite: 'pce', rendement: 2.8125 },
+    { name: 'Soupape',                                                 unite: 'pce', rendement: 2.8125 },
+    { name: 'Fond grillagé',                                           unite: 'pce', rendement: 2.8125 },
+    { name: 'Portillon de révision rect. GALVA',                       unite: 'pce', rendement: 2.8125 },
+    { name: 'Grille compensation désenfumage plateau production',      unite: 'pce', rendement: 2.8125 },
+    { name: 'Portillon de révision rect. GALVA > +70°C',               unite: 'pce', rendement: 2.8125 },
+    { name: 'Portillon de révision rect. GALVA étanche',               unite: 'pce', rendement: 2.8125 },
+    { name: 'Portillon de révision rect. GALVA isolé',                 unite: 'pce', rendement: 2.8125 },
+    { name: 'Portillon de révision GALVA circulaire',                  unite: 'pce', rendement: 2.8125 },
+    { name: 'Portillon de révision rect. V4A',                         unite: 'pce', rendement: 2.8125 },
+    { name: 'Plaquette indicatrice autocollante',                      unite: 'pce', rendement: 12.5   }, // 200 pcs/j ÷ 16
+    { name: 'Bouchon',                                                 unite: 'pce', rendement: 62.5   }, //1000 pcs/j ÷ 16
     // ── Organes de régulation ─────────────────────────────────────────
-    { name: 'VAV rectangulaire galva',                                 unite: 'pce', rendement: 45 },
-    { name: 'VAV circulaire galva',                                    unite: 'pce', rendement: 45 },
-    { name: 'CCF rectangulaire GALVA',                                 unite: 'pce', rendement: 8 },
-    { name: 'Kit de montage CCF pour parois légères',                  unite: 'pce', rendement: 8 },
-    { name: 'CCF circulaire GALVA',                                    unite: 'pce', rendement: 8 },
-    { name: 'Clapets de désenfumage',                                  unite: 'pce', rendement: 8 },
-    { name: 'Clapets de fermeture V4A 600°C',                         unite: 'pce', rendement: 8 },
-    { name: 'Régulateur de débit constant mécanique circulaire',       unite: 'pce', rendement: 45 },
-    { name: 'VAV rectangulaire V2A',                                   unite: 'pce', rendement: 45 },
-    { name: 'Clapets de fermeture galva',                              unite: 'pce', rendement: 45 },
-    { name: 'Pose des périphériques',                                  unite: 'pce', rendement: 45 },
+    { name: 'VAV rectangulaire galva',                                 unite: 'pce', rendement: 2.8125 },
+    { name: 'VAV circulaire galva',                                    unite: 'pce', rendement: 2.8125 },
+    { name: 'CCF rectangulaire GALVA',                                 unite: 'pce', rendement: 0.5    }, //   8 pcs/j ÷ 16
+    { name: 'Kit de montage CCF pour parois légères',                  unite: 'pce', rendement: 0.5    },
+    { name: 'CCF circulaire GALVA',                                    unite: 'pce', rendement: 0.5    },
+    { name: 'Clapets de désenfumage',                                  unite: 'pce', rendement: 0.5    },
+    { name: 'Clapets de fermeture V4A 600°C',                         unite: 'pce', rendement: 0.5    },
+    { name: 'Régulateur de débit constant mécanique circulaire',       unite: 'pce', rendement: 2.8125 },
+    { name: 'VAV rectangulaire V2A',                                   unite: 'pce', rendement: 2.8125 },
+    { name: 'Clapets de fermeture galva',                              unite: 'pce', rendement: 2.8125 },
+    { name: 'Pose des périphériques',                                  unite: 'pce', rendement: 2.8125 },
   ]
   const { error: ttErr } = await supabase
     .from('task_types')
