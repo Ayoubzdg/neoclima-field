@@ -4,26 +4,32 @@ import { useAuthStore } from '@/store/authStore'
 import { getTaskTypes, upsertTaskType, deleteTaskType } from '@/lib/supabase'
 import type { TaskType } from '@/types/models'
 
-const UNITES = ['m²', 'm³', 'ml', 'u', 'kg', 'h', 'forfait']
+const UNITES = ['pce', 'ml', 'm²', 'm³', 'u', 'kg', 'h', 'forfait']
+
+// Équipe de 2 monteurs × 8h/jour = 16 h·monteur/jour
+const TEAM_HM_PER_DAY = 16
 
 interface TaskTypeForm {
   name: string
   unite: string
   phases: string         // comma-separated in the form
-  rendement: string
+  rendement: string      // pce/h/monteur (valeur DB)
+  pcsParJour: string     // pcs/jour équipe 2 — champ de saisie naturel
   cout_unitaire: string
 }
 
 const emptyForm = (): TaskTypeForm => ({
-  name: '', unite: 'm²', phases: '', rendement: '', cout_unitaire: '0',
+  name: '', unite: 'pce', phases: '', rendement: '', pcsParJour: '', cout_unitaire: '0',
 })
 
 function fromTaskType(tt: TaskType): TaskTypeForm {
+  const rend = tt.rendement
   return {
     name: tt.name,
     unite: tt.unite,
     phases: tt.phases.join(', '),
-    rendement: tt.rendement !== null ? String(tt.rendement) : '',
+    rendement: rend !== null ? String(rend) : '',
+    pcsParJour: rend !== null ? String(Math.round(rend * TEAM_HM_PER_DAY * 100) / 100) : '',
     cout_unitaire: String(tt.cout_unitaire),
   }
 }
@@ -71,34 +77,71 @@ function TaskTypeForm({ initial, onSave, onCancel }: {
         />
       )}
 
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-            Rendement ({form.unite}/h/monteur)
-          </label>
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/20"
-            value={form.rendement}
-            onChange={e => setForm(f => ({ ...f, rendement: e.target.value }))}
-            placeholder="Optionnel"
-          />
+      {/* Productivité — double champ lié */}
+      <div className="space-y-2">
+        <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+          Productivité
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {/* Champ principal : pcs/jour équipe 2 */}
+          <div>
+            <label className="text-[10px] text-gray-400 mb-0.5 block">
+              {form.unite}/jour <span className="text-gray-300">(équipe 2 pers.)</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              className="w-full border border-nc-blue/30 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/30 bg-white"
+              value={form.pcsParJour}
+              onChange={e => {
+                const v = e.target.value
+                const rend = v ? String(Math.round((parseFloat(v) / TEAM_HM_PER_DAY) * 10000) / 10000) : ''
+                setForm(f => ({ ...f, pcsParJour: v, rendement: rend }))
+              }}
+              placeholder="Ex: 45"
+            />
+          </div>
+          {/* Champ dérivé : h/monteur (calculé auto) */}
+          <div>
+            <label className="text-[10px] text-gray-400 mb-0.5 block">
+              {form.unite}/h/monteur <span className="text-gray-300">(calculé)</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.0001"
+              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/20 bg-gray-50 text-gray-500"
+              value={form.rendement}
+              onChange={e => {
+                const v = e.target.value
+                const pcs = v ? String(Math.round(parseFloat(v) * TEAM_HM_PER_DAY * 100) / 100) : ''
+                setForm(f => ({ ...f, rendement: v, pcsParJour: pcs }))
+              }}
+              placeholder="Auto"
+            />
+          </div>
         </div>
-        <div className="flex-1">
-          <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-            Coût unitaire (CHF/{form.unite})
-          </label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/20"
-            value={form.cout_unitaire}
-            onChange={e => setForm(f => ({ ...f, cout_unitaire: e.target.value }))}
-          />
-        </div>
+        {form.pcsParJour && form.rendement && (
+          <p className="text-[10px] text-gray-400 bg-gray-50 rounded-lg px-2 py-1">
+            1 monteur produit <strong>{form.rendement}</strong> {form.unite}/h
+            → équipe de 2 : <strong>{form.pcsParJour}</strong> {form.unite}/jour
+          </p>
+        )}
+      </div>
+
+      <div className="flex-1">
+        <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+          Coût unitaire (CHF/{form.unite})
+        </label>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/20"
+          value={form.cout_unitaire}
+          onChange={e => setForm(f => ({ ...f, cout_unitaire: e.target.value }))}
+        />
       </div>
 
       <div>
@@ -237,8 +280,15 @@ export default function ParamTaskTypes() {
                       <p className="font-semibold text-nc-blue text-sm">{tt.name}</p>
                       <div className="flex items-center flex-wrap gap-2 mt-1">
                         <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{tt.unite}</span>
-                        {tt.rendement && (
-                          <span className="text-xs text-gray-400">{tt.rendement} {tt.unite}/h/monteur</span>
+                        {tt.rendement != null && (
+                          <>
+                            <span className="text-xs font-semibold text-nc-blue bg-blue-50 px-2 py-0.5 rounded-full">
+                              {Math.round(tt.rendement * TEAM_HM_PER_DAY * 100) / 100} {tt.unite}/j·éq.
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              = {tt.rendement} {tt.unite}/h/monteur
+                            </span>
+                          </>
                         )}
                         {tt.cout_unitaire > 0 && (
                           <span className="text-xs text-gray-400">{tt.cout_unitaire} CHF/{tt.unite}</span>
