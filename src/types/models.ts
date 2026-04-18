@@ -403,3 +403,57 @@ export interface SessionUtilisateur {
   role: UserRole
   chantierId: string
 }
+
+// ═══════════════════════════════════════════════════════════
+// ARCHITECTURE MULTI-ENTREPRISE
+// ═══════════════════════════════════════════════════════════
+
+// ── Entreprise ──────────────────────────────────────────────
+
+export interface Entreprise {
+  id: string
+  name: string
+  code_acces: string   // Toujours en MAJUSCULES dans la DB
+  actif: boolean
+  created_at: string
+}
+
+// ── Personne ────────────────────────────────────────────────
+// Identité unique par personne, indépendante des chantiers.
+// Le rôle est le même sur tous les projets.
+
+export interface Personne {
+  id: string
+  entreprise_id: string
+  nom: string
+  prenom: string | null
+  role: UserRole
+  code_pin: string | null
+  actif: boolean
+  created_at: string
+}
+
+// ── AccesChantier ────────────────────────────────────────────
+
+export interface AccesChantier {
+  id: string
+  personne_id: string
+  chantier_id: string
+  equipe_id: string | null
+  created_at: string
+}
+
+// ── Résultat du RPC login_personne ───────────────────────────
+
+export interface LoginPersonneResult {
+  personne_id: string
+  nom: string
+  prenom: string | null
+  role: UserRole
+  equipe_id: string | null
+  chantier_id: string
+  chantier_name: string
+  chantier_client: string | null
+  chantier_takt_duree: number
+  chantier_budget_heures: number
+}

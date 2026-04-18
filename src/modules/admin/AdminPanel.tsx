@@ -2,15 +2,19 @@ import { useEffect, useState, useMemo } from 'react'
 import {
   Shield, Plus, Edit2, Check, X, Eye, EyeOff,
   UserCheck, UserX, Loader2, AlertCircle, RefreshCw,
-  Building2, Calendar, Users, ChevronRight, CheckCircle2
+  Building2, Calendar, Users, ChevronRight, ChevronDown, CheckCircle2,
+  KeyRound, Trash2
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import {
   getEquipes, getUtilisateursAll, upsertUtilisateur,
   deleteUtilisateur, setUtilisateurActif,
-  getChantiers, createChantierComplet
+  getChantiers, createChantierComplet,
+  getEntreprises, upsertEntreprise, deleteEntreprise,
+  getPersonnesByEntreprise, upsertPersonne, deletePersonne, setPersonneActif,
+  getAccesByPersonne, addAccesChantier, removeAccesChantier
 } from '@/lib/supabase'
-import type { Equipe, Utilisateur, UserRole, Chantier } from '@/types/models'
+import type { Equipe, Utilisateur, UserRole, Chantier, Entreprise, Personne, AccesChantier } from '@/types/models'
 import type { NouveauChantierPayload } from '@/lib/supabase'
 
 // ─────────────────────────────────────────────────────────────
@@ -671,10 +675,467 @@ function ProjetsTab() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Composant — Onglet Entreprises (nouveau modèle multi-cie)
+// ─────────────────────────────────────────────────────────────
+
+const ROLES_LIST: { value: UserRole; label: string; color: string }[] = [
+  { value: 'monteur', label: 'Monteur',  color: 'text-gray-700' },
+  { value: 'chef',    label: 'Chef',     color: 'text-blue-700' },
+  { value: 'ca',      label: 'C.A.',     color: 'text-purple-700' },
+  { value: 'admin',   label: 'Admin',    color: 'text-red-700' },
+]
+
+function PersonneRow({
+  personne,
+  acces,
+  chantiers,
+  onEdit,
+  onDelete,
+  onToggle,
+  onAddAcces,
+  onRemoveAcces,
+}: {
+  personne: Personne
+  acces: AccesChantier[]
+  chantiers: Chantier[]
+  onEdit: () => void
+  onDelete: () => void
+  onToggle: () => void
+  onAddAcces: (chantierId: string) => void
+  onRemoveAcces: (chantierId: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const roleMeta = ROLES_LIST.find(r => r.value === personne.role) ?? ROLES_LIST[0]
+  const personneChantiers = acces.map(a => chantiers.find(c => c.id === a.chantier_id)).filter(Boolean) as Chantier[]
+  const availableChantiers = chantiers.filter(c => !acces.find(a => a.chantier_id === c.id))
+
+  return (
+    <div className={`border-b border-gray-50 last:border-0 ${!personne.actif ? 'opacity-50' : ''}`}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${personne.actif ? 'bg-nc-blue text-white' : 'bg-gray-200 text-gray-400'}`}>
+          {(personne.prenom?.[0] ?? '').toUpperCase()}{personne.nom[0].toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-nc-blue">{personne.prenom} {personne.nom}</p>
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-gray-100 ${roleMeta.color}`}>
+              {roleMeta.label}
+            </span>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-0.5">
+            {personneChantiers.length === 0
+              ? 'Aucun chantier assigné'
+              : `${personneChantiers.length} chantier${personneChantiers.length > 1 ? 's' : ''}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={() => setExpanded(e => !e)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" title="Chantiers">
+            <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+          <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" title="Modifier">
+            <Edit2 size={13} />
+          </button>
+          <button onClick={onToggle} className={`p-1.5 rounded-lg ${personne.actif ? 'hover:bg-red-50 text-gray-300 hover:text-red-400' : 'hover:bg-green-50 text-gray-300 hover:text-green-500'}`} title={personne.actif ? 'Désactiver' : 'Réactiver'}>
+            {personne.actif ? <UserX size={13} /> : <UserCheck size={13} />}
+          </button>
+          <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400" title="Supprimer">
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="bg-gray-50/60 px-4 pb-3 space-y-1.5">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider pt-1">Chantiers assignés</p>
+          {personneChantiers.map(c => (
+            <div key={c.id} className="flex items-center justify-between text-xs bg-white px-3 py-1.5 rounded-lg border border-gray-100">
+              <span className="font-medium text-nc-blue">{c.name}</span>
+              <button onClick={() => onRemoveAcces(c.id)} className="text-red-400 hover:text-red-600 text-[10px]">Retirer</button>
+            </div>
+          ))}
+          {availableChantiers.length > 0 && (
+            <select
+              defaultValue=""
+              onChange={e => { if (e.target.value) { onAddAcces(e.target.value); e.target.value = '' } }}
+              className="mt-1 w-full border border-dashed border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-500 bg-white focus:outline-none"
+            >
+              <option value="">+ Ajouter un chantier…</option>
+              {availableChantiers.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PersonneForm({
+  initial,
+  entrepriseId,
+  onSave,
+  onCancel,
+}: {
+  initial: Partial<Personne>
+  entrepriseId: string
+  onSave: (p: Personne) => void
+  onCancel: () => void
+}) {
+  const [form, setForm] = useState({
+    prenom: initial.prenom ?? '',
+    nom: initial.nom ?? '',
+    role: (initial.role ?? 'monteur') as UserRole,
+    code_pin: initial.code_pin ?? '',
+  })
+  const [showPin, setShowPin] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSave = async () => {
+    if (!form.nom.trim()) { setError('Nom requis'); return }
+    if (!form.code_pin.trim() && !initial.id) { setError('PIN requis'); return }
+    setSaving(true)
+    setError('')
+    try {
+      const saved = await upsertPersonne({
+        ...(initial.id ? { id: initial.id } : {}),
+        entreprise_id: entrepriseId,
+        prenom: form.prenom.trim() || null,
+        nom: form.nom.trim(),
+        role: form.role,
+        code_pin: form.code_pin.trim() || initial.code_pin,
+        actif: initial.actif ?? true,
+      })
+      onSave(saved)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-blue-50/30 rounded-xl border border-nc-blue/20 p-3 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Prénom</label>
+          <input value={form.prenom} onChange={e => setForm(f => ({ ...f, prenom: e.target.value }))}
+            className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/20" placeholder="Jean" />
+        </div>
+        <div>
+          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Nom *</label>
+          <input value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} autoFocus
+            className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/20" placeholder="Dupont" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Rôle</label>
+          <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as UserRole }))}
+            className="mt-0.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/20 bg-white">
+            {ROLES_LIST.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">PIN *</label>
+          <div className="flex gap-1 mt-0.5">
+            <input type={showPin ? 'text' : 'password'} value={form.code_pin}
+              onChange={e => setForm(f => ({ ...f, code_pin: e.target.value }))} maxLength={6}
+              className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-nc-blue/20" placeholder="••••" />
+            <button type="button" onClick={() => setShowPin(p => !p)} className="px-2 py-1.5 border border-gray-200 rounded-lg text-[10px] text-gray-400 hover:bg-gray-50">
+              {showPin ? <EyeOff size={11} /> : <Eye size={11} />}
+            </button>
+            <button type="button" onClick={() => setForm(f => ({ ...f, code_pin: String(Math.floor(1000 + Math.random() * 9000)) }))}
+              className="px-2 py-1.5 border border-gray-200 rounded-lg text-[10px] text-gray-400 hover:bg-gray-50" title="Générer">↺</button>
+          </div>
+        </div>
+      </div>
+
+      {error && <p className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-lg">{error}</p>}
+
+      <div className="flex gap-2">
+        <button onClick={handleSave} disabled={saving}
+          className="flex items-center gap-1 px-4 py-1.5 bg-nc-blue text-white text-xs font-semibold rounded-lg disabled:opacity-40 hover:bg-nc-blue/90">
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+          Enregistrer
+        </button>
+        <button onClick={onCancel} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50">Annuler</button>
+      </div>
+    </div>
+  )
+}
+
+function EntrepriseBlock({
+  entreprise,
+  chantiers,
+  onUpdated,
+}: {
+  entreprise: Entreprise
+  chantiers: Chantier[]
+  onUpdated: () => void
+}) {
+  const [personnes, setPersonnes] = useState<Personne[]>([])
+  const [acces, setAcces] = useState<Record<string, AccesChantier[]>>({})
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState(false)
+  const [addingPersonne, setAddingPersonne] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    const list = await getPersonnesByEntreprise(entreprise.id)
+    setPersonnes(list)
+    // Charger les accès de toutes les personnes
+    const accesMap: Record<string, AccesChantier[]> = {}
+    await Promise.all(list.map(async p => {
+      accesMap[p.id] = await getAccesByPersonne(p.id)
+    }))
+    setAcces(accesMap)
+    setLoading(false)
+  }
+
+  useEffect(() => { if (expanded) load() }, [expanded, entreprise.id])
+
+  const handleSaved = async (saved: Personne) => {
+    setAddingPersonne(false)
+    setEditingId(null)
+    await load()
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* En-tête entreprise */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50/50 transition-colors"
+      >
+        <div className="w-9 h-9 rounded-xl bg-nc-blue text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+          {entreprise.code_acces.slice(0, 2)}
+        </div>
+        <div className="flex-1 text-left">
+          <p className="text-sm font-semibold text-nc-blue">{entreprise.name}</p>
+          <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+            Code : <strong className="text-gray-600">{entreprise.code_acces}</strong>
+          </p>
+        </div>
+        <ChevronDown size={15} className={`text-gray-400 transition-transform flex-shrink-0 ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Corps expansible */}
+      {expanded && (
+        <div className="border-t border-gray-100">
+          {loading ? (
+            <div className="flex justify-center py-6">
+              <Loader2 size={20} className="animate-spin text-nc-blue" />
+            </div>
+          ) : (
+            <>
+              {/* Formulaire ajout personne */}
+              {addingPersonne && (
+                <div className="p-3 border-b border-gray-100">
+                  <PersonneForm
+                    initial={{}}
+                    entrepriseId={entreprise.id}
+                    onSave={handleSaved}
+                    onCancel={() => setAddingPersonne(false)}
+                  />
+                </div>
+              )}
+
+              {/* Liste des personnes */}
+              {personnes.map(p => (
+                <div key={p.id}>
+                  {editingId === p.id ? (
+                    <div className="p-3 border-b border-gray-100">
+                      <PersonneForm
+                        initial={p}
+                        entrepriseId={entreprise.id}
+                        onSave={handleSaved}
+                        onCancel={() => setEditingId(null)}
+                      />
+                    </div>
+                  ) : (
+                    <PersonneRow
+                      personne={p}
+                      acces={acces[p.id] ?? []}
+                      chantiers={chantiers}
+                      onEdit={() => { setEditingId(p.id); setAddingPersonne(false) }}
+                      onDelete={async () => {
+                        if (!confirm(`Supprimer ${p.prenom} ${p.nom} ?`)) return
+                        await deletePersonne(p.id)
+                        await load()
+                      }}
+                      onToggle={async () => {
+                        await setPersonneActif(p.id, !p.actif)
+                        await load()
+                      }}
+                      onAddAcces={async (chantierId) => {
+                        await addAccesChantier(p.id, chantierId)
+                        await load()
+                      }}
+                      onRemoveAcces={async (chantierId) => {
+                        await removeAccesChantier(p.id, chantierId)
+                        await load()
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+
+              {personnes.length === 0 && !addingPersonne && (
+                <div className="text-center py-6 text-gray-400 text-sm">
+                  Aucune personne enregistrée
+                </div>
+              )}
+
+              {/* Bouton ajouter personne */}
+              {!addingPersonne && (
+                <div className="p-3 border-t border-gray-100">
+                  <button
+                    onClick={() => { setAddingPersonne(true); setEditingId(null) }}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-gray-500 border border-dashed border-gray-200 rounded-xl hover:border-nc-blue/30 hover:text-nc-blue hover:bg-blue-50/30 transition-colors"
+                  >
+                    <Plus size={13} />
+                    Ajouter une personne
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EntreprisesTab() {
+  const [entreprises, setEntreprises] = useState<Entreprise[]>([])
+  const [chantiers, setChantiers] = useState<Chantier[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [formName, setFormName] = useState('')
+  const [formCode, setFormCode] = useState('')
+  const [formError, setFormError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    const [e, c] = await Promise.all([getEntreprises(), getChantiers()])
+    setEntreprises(e)
+    setChantiers(c)
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const handleCreate = async () => {
+    if (!formName.trim()) { setFormError('Nom requis'); return }
+    if (!formCode.trim()) { setFormError('Code requis'); return }
+    setSaving(true)
+    setFormError('')
+    try {
+      await upsertEntreprise({ name: formName.trim(), code_acces: formCode.trim().toUpperCase(), actif: true })
+      setFormName('')
+      setFormCode('')
+      setShowForm(false)
+      await load()
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex gap-2">
+        <KeyRound size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+        <div className="text-xs text-blue-700">
+          <p className="font-semibold">Nouveau modèle de connexion</p>
+          <p className="mt-0.5">
+            Chaque entreprise a un code d'accès unique. Les personnes se connectent avec ce code + leur PIN.
+            Si elles ont accès à plusieurs chantiers, un sélecteur apparaît.
+          </p>
+        </div>
+      </div>
+
+      {/* Formulaire création entreprise */}
+      {showForm && (
+        <div className="bg-white rounded-2xl border border-nc-blue/20 p-4 space-y-3">
+          <p className="text-sm font-bold text-nc-blue">Nouvelle entreprise</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Nom *</label>
+              <input value={formName} onChange={e => setFormName(e.target.value)} autoFocus
+                placeholder="Neoclima SA"
+                className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/30" />
+            </div>
+            <div>
+              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Code d'accès *</label>
+              <input value={formCode} onChange={e => setFormCode(e.target.value.toUpperCase())}
+                placeholder="NEOCLIMA"
+                className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-nc-blue/30" />
+            </div>
+          </div>
+          {formError && <p className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-lg">{formError}</p>}
+          <div className="flex gap-2">
+            <button onClick={handleCreate} disabled={saving}
+              className="flex items-center gap-1 px-4 py-2 bg-nc-blue text-white text-sm font-semibold rounded-lg disabled:opacity-40">
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              Créer
+            </button>
+            <button onClick={() => { setShowForm(false); setFormError('') }}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-500 hover:bg-gray-50">Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {/* Liste entreprises */}
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2].map(i => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {entreprises.map(e => (
+            <EntrepriseBlock
+              key={e.id}
+              entreprise={e}
+              chantiers={chantiers}
+              onUpdated={load}
+            />
+          ))}
+          {entreprises.length === 0 && !showForm && (
+            <div className="text-center py-10 text-gray-400">
+              <Building2 size={32} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Aucune entreprise configurée</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bouton créer */}
+      {!showForm && (
+        <button
+          onClick={() => setShowForm(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-200 rounded-2xl text-sm text-gray-500 hover:border-nc-blue/30 hover:text-nc-blue hover:bg-blue-50/30 transition-colors"
+        >
+          <Plus size={16} />
+          Nouvelle entreprise
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
 // AdminPanel — composant principal
 // ─────────────────────────────────────────────────────────────
 
-type Tab = 'utilisateurs' | 'projets'
+type Tab = 'utilisateurs' | 'projets' | 'entreprises'
 
 export default function AdminPanel() {
   const { role, utilisateur, chantier } = useAuthStore()
@@ -815,12 +1276,13 @@ export default function AdminPanel() {
       <div className="flex rounded-xl border border-gray-200 overflow-hidden text-sm font-medium mb-5">
         {([
           { key: 'utilisateurs', label: 'Utilisateurs', icon: <Users size={14} /> },
-          { key: 'projets', label: 'Projets', icon: <Building2 size={14} /> },
+          { key: 'projets',      label: 'Projets',      icon: <Building2 size={14} /> },
+          { key: 'entreprises',  label: 'Entreprises',  icon: <KeyRound size={14} /> },
         ] as { key: Tab; label: string; icon: React.ReactNode }[]).map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 transition-colors ${
               activeTab === tab.key
                 ? 'bg-nc-blue text-white'
                 : 'text-gray-500 hover:bg-gray-50'
@@ -834,6 +1296,9 @@ export default function AdminPanel() {
 
       {/* Onglet Projets */}
       {activeTab === 'projets' && <ProjetsTab />}
+
+      {/* Onglet Entreprises */}
+      {activeTab === 'entreprises' && <EntreprisesTab />}
 
       {/* Onglet Utilisateurs */}
       {activeTab === 'utilisateurs' && (

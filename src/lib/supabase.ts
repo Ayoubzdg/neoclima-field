@@ -3,7 +3,8 @@ import type {
   Chantier, Secteur, ZoneTakt, CycleTakt, Task, TaskPhase,
   Contrainte, NonConformite, Mesure, Photo, TaskHistory,
   Effectif, Equipe, Utilisateur, WeeklyPlan, TaskType,
-  PlanVersion, Materiau, SyncQueueItem, VueAvancementZone
+  PlanVersion, Materiau, SyncQueueItem, VueAvancementZone,
+  Entreprise, Personne, AccesChantier, LoginPersonneResult
 } from '@/types/models'
 
 // ── Client Supabase ─────────────────────────────────────────
@@ -886,6 +887,135 @@ export async function createChantierComplet(payload: NouveauChantierPayload): Pr
   if (ttErr) handleError(ttErr, 'createTaskTypes')
 
   return chantier
+}
+
+// ═══════════════════════════════════════════════════════════
+// MULTI-ENTREPRISE
+// ═══════════════════════════════════════════════════════════
+
+// ── Vérifier qu'un code entreprise existe ──────────────────
+export async function getEntrepriseByCode(
+  code: string
+): Promise<{ id: string; name: string; code_acces: string } | null> {
+  const { data, error } = await supabase.rpc('get_entreprise_by_code', { p_code: code })
+  if (error || !data || data.length === 0) return null
+  return data[0] as { id: string; name: string; code_acces: string }
+}
+
+// ── Login multi-entreprise ──────────────────────────────────
+// Retourne 0 (mauvais code/PIN), 1 (login direct) ou N (sélecteur)
+export async function loginPersonne(
+  codeEntreprise: string,
+  codePin: string
+): Promise<LoginPersonneResult[]> {
+  const { data, error } = await supabase.rpc('login_personne', {
+    p_code_entreprise: codeEntreprise,
+    p_code_pin: codePin
+  })
+  if (error) return []
+  return (data ?? []) as LoginPersonneResult[]
+}
+
+// ── CRUD Entreprises ────────────────────────────────────────
+
+export async function getEntreprises(): Promise<Entreprise[]> {
+  const { data, error } = await supabase
+    .from('entreprises')
+    .select('*')
+    .order('name')
+  if (error) handleError(error, 'getEntreprises')
+  return (data ?? []) as Entreprise[]
+}
+
+export async function upsertEntreprise(e: Partial<Entreprise>): Promise<Entreprise> {
+  // Forcer UPPERCASE sur le code
+  const payload = e.code_acces
+    ? { ...e, code_acces: e.code_acces.toUpperCase().trim() }
+    : e
+  const { data, error } = await supabase
+    .from('entreprises')
+    .upsert(payload)
+    .select()
+    .single()
+  if (error) handleError(error, 'upsertEntreprise')
+  return data as Entreprise
+}
+
+export async function deleteEntreprise(id: string): Promise<void> {
+  const { error } = await supabase.from('entreprises').delete().eq('id', id)
+  if (error) handleError(error, 'deleteEntreprise')
+}
+
+// ── CRUD Personnes ──────────────────────────────────────────
+
+export async function getPersonnesByEntreprise(entrepriseId: string): Promise<Personne[]> {
+  const { data, error } = await supabase
+    .from('personnes')
+    .select('*')
+    .eq('entreprise_id', entrepriseId)
+    .order('nom')
+  if (error) handleError(error, 'getPersonnesByEntreprise')
+  return (data ?? []) as Personne[]
+}
+
+export async function upsertPersonne(p: Partial<Personne>): Promise<Personne> {
+  const { data, error } = await supabase
+    .from('personnes')
+    .upsert(p)
+    .select()
+    .single()
+  if (error) handleError(error, 'upsertPersonne')
+  return data as Personne
+}
+
+export async function deletePersonne(id: string): Promise<void> {
+  const { error } = await supabase.from('personnes').delete().eq('id', id)
+  if (error) handleError(error, 'deletePersonne')
+}
+
+export async function setPersonneActif(id: string, actif: boolean): Promise<void> {
+  const { error } = await supabase.from('personnes').update({ actif }).eq('id', id)
+  if (error) handleError(error, 'setPersonneActif')
+}
+
+// ── Accès chantier ──────────────────────────────────────────
+
+export async function getAccesByChantier(chantierId: string): Promise<AccesChantier[]> {
+  const { data, error } = await supabase
+    .from('acces_chantier')
+    .select('*')
+    .eq('chantier_id', chantierId)
+  if (error) handleError(error, 'getAccesByChantier')
+  return (data ?? []) as AccesChantier[]
+}
+
+export async function getAccesByPersonne(personneId: string): Promise<AccesChantier[]> {
+  const { data, error } = await supabase
+    .from('acces_chantier')
+    .select('*')
+    .eq('personne_id', personneId)
+  if (error) handleError(error, 'getAccesByPersonne')
+  return (data ?? []) as AccesChantier[]
+}
+
+export async function addAccesChantier(
+  personneId: string,
+  chantierId: string,
+  equipeId?: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('acces_chantier')
+    .upsert({ personne_id: personneId, chantier_id: chantierId, equipe_id: equipeId ?? null })
+  if (error) handleError(error, 'addAccesChantier')
+}
+
+export async function removeAccesChantier(personneId: string, chantierId: string): Promise<void> {
+  const { error } = await supabase
+    .from('acces_chantier')
+    .delete()
+    .eq('personne_id', personneId)
+    .eq('chantier_id', chantierId)
+  if (error) handleError(error, 'removeAccesChantier')
 }
 
 // ── SYNC QUEUE ──────────────────────────────────────────────
