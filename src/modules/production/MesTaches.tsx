@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle, AlertCircle, Clock, Play, Plus, Minus, AlertTriangle, ChevronRight, Moon, QrCode, Users } from 'lucide-react'
+import { CheckCircle, AlertCircle, Clock, Play, Plus, Minus, AlertTriangle, ChevronRight, Moon, QrCode, Users, RotateCcw } from 'lucide-react'
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
 import { currentMondayISO, formatDateFR, todayISO, addDays, formatDateISO, getSemaineLabel } from '@/utils/dates'
@@ -117,7 +117,7 @@ export default function MesTaches() {
       nappe_b:      'terminaux',
       terminaux:    'raccordement',
       raccordement: 'done',
-      done:         'todo',
+      done:         'en_cours',  // annuler → remet en cours (conserve la progression)
       blocked:      'en_cours',
     }
     await updateStatus(task.id, next[task.status] ?? 'en_cours', {}, role ?? 'monteur')
@@ -400,66 +400,81 @@ function InlineTaskCard({
         </div>
       )}
 
-      {/* Actions rapides */}
-      {task.status !== 'done' && (
-        <div className="flex items-center gap-0 border-t border-gray-100/80 px-1 py-1">
-          {/* Contrôle quantité — swipe ← → ou boutons +/- */}
-          <div className="flex items-center gap-1 flex-1 px-1">
-            <button
-              onClick={() => onQtyChange(-1)}
-              disabled={task.qte_realisee <= 0}
-              className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30
-                         flex items-center justify-center active:scale-90 transition-all touch-manipulation flex-shrink-0"
-            >
-              <Minus size={13} />
-            </button>
-            <SwipeQtyZone
-              value={task.qte_realisee}
-              max={task.qte_prevue}
-              unite={task.unite}
-              onDelta={onQtyChange}
-            />
-            <button
-              onClick={() => onQtyChange(+1)}
-              className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200
-                         flex items-center justify-center active:scale-90 transition-all touch-manipulation flex-shrink-0"
-            >
-              <Plus size={13} />
-            </button>
-          </div>
+      {/* Actions rapides — toujours présentes pour permettre l'annulation */}
+      <div className="flex items-center border-t border-gray-100/80 px-1 py-1 min-h-[40px]">
+        {task.status === 'done' ? (
+          /* ── Tâche terminée : seul bouton = annuler ── */
+          <button
+            onClick={onStatusCycle}
+            className="flex-1 flex items-center justify-center gap-2 py-1 text-xs font-medium
+                       text-gray-400 hover:text-nc-blue hover:bg-gray-50 active:scale-95
+                       transition-all rounded-xl touch-manipulation"
+          >
+            <RotateCcw size={13} />
+            Annuler — remettre en cours
+          </button>
+        ) : (
+          <>
+            {/* ── Contrôle quantité : boutons +/- + tap pour saisir ── */}
+            <div className="flex items-center gap-1 flex-1 px-1">
+              <button
+                onClick={() => onQtyChange(-1)}
+                disabled={task.qte_realisee <= 0}
+                className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30
+                           flex items-center justify-center active:scale-90 transition-all touch-manipulation flex-shrink-0"
+              >
+                <Minus size={14} />
+              </button>
 
-          {/* Bouton blocage */}
-          {task.status !== 'blocked' ? (
-            <button
-              onClick={onBlocage}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium
-                         text-red-500 hover:bg-red-50 active:scale-95 transition-all touch-manipulation"
-            >
-              <AlertTriangle size={13} />
-              Bloquer
-            </button>
-          ) : (
-            <button
-              onClick={onBlocage}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium
-                         text-amber-600 hover:bg-amber-50 active:scale-95 transition-all touch-manipulation"
-            >
-              <AlertTriangle size={13} />
-              Modifier
-            </button>
-          )}
-        </div>
-      )}
+              <TapQtyControl
+                value={task.qte_realisee}
+                max={task.qte_prevue}
+                unite={task.unite}
+                onDelta={onQtyChange}
+              />
+
+              <button
+                onClick={() => onQtyChange(+1)}
+                className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200
+                           flex items-center justify-center active:scale-90 transition-all touch-manipulation flex-shrink-0"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+
+            {/* ── Bouton blocage ── */}
+            {task.status !== 'blocked' ? (
+              <button
+                onClick={onBlocage}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium
+                           text-red-500 hover:bg-red-50 active:scale-95 transition-all touch-manipulation"
+              >
+                <AlertTriangle size={13} />
+                Bloquer
+              </button>
+            ) : (
+              <button
+                onClick={onBlocage}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium
+                           text-amber-600 hover:bg-amber-50 active:scale-95 transition-all touch-manipulation"
+              >
+                <AlertTriangle size={13} />
+                Modifier
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
 
-// ── Contrôle quantité swipeable ──────────────────────────────
-// Glisse ← pour diminuer, → pour augmenter.
-// Sensibilité auto : 200px = plage complète (0 → cap).
-// Les boutons +/- à côté servent pour ±1 précis.
+// ── Saisie quantité par tap → clavier natif ─────────────────
+// Le monteur tape directement le nombre réalisé (ex: "480").
+// Les boutons +/- à côté servent pour corriger de ±1.
+// En tapant le chiffre, le clavier numérique du téléphone s'ouvre.
 
-function SwipeQtyZone({
+function TapQtyControl({
   value, max, unite, onDelta
 }: {
   value: number
@@ -467,93 +482,79 @@ function SwipeQtyZone({
   unite: string
   onDelta: (delta: number) => void
 }) {
-  const cap = Math.max(max * 2, max + 20)
-  const startXRef  = useRef<number | null>(null)
-  const startValRef = useRef(0)
-  const [localVal, setLocalVal] = useState(value)
-  const [dragging, setDragging] = useState(false)
+  const [editing, setEditing]   = useState(false)
+  const [raw, setRaw]           = useState('')
+  const inputRef                = useRef<HTMLInputElement>(null)
 
-  // Synchro quand la valeur change depuis le store (après save async)
-  useEffect(() => {
-    if (!dragging) setLocalVal(value)
-  }, [value, dragging])
-
-  const computeVal = (clientX: number) => {
-    if (startXRef.current === null) return value
-    const dx      = clientX - startXRef.current
-    // 200 px = plage entière (0..cap)
-    const delta   = Math.round((dx / 200) * cap)
-    return Math.min(cap, Math.max(0, startValRef.current + delta))
+  const openEdit = () => {
+    setRaw(String(value))
+    setEditing(true)
+    // Focus après le prochain render pour que le clavier s'ouvre
+    requestAnimationFrame(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    })
   }
 
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId)
-    startXRef.current  = e.clientX
-    startValRef.current = value
-    setDragging(true)
-  }
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging || startXRef.current === null) return
-    setLocalVal(computeVal(e.clientX))
-  }
-  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (startXRef.current === null) return
-    const newVal = computeVal(e.clientX)
-    startXRef.current = null
-    setDragging(false)
-    const delta = newVal - value
-    if (delta !== 0) onDelta(delta)
-  }
-  const onPointerCancel = () => {
-    startXRef.current = null
-    setDragging(false)
-    setLocalVal(value)
+  const confirm = () => {
+    const n = parseInt(raw, 10)
+    if (!isNaN(n) && n >= 0) {
+      const delta = n - value
+      if (delta !== 0) onDelta(delta)
+    }
+    setEditing(false)
   }
 
-  const display = dragging ? localVal : value
-  const pct     = max > 0 ? Math.min(100, (display / max) * 100) : 0
-  const diff    = display - value
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
 
-  return (
-    <div
-      className={`flex-1 flex flex-col justify-center cursor-ew-resize select-none touch-none
-                  px-1 py-0.5 rounded-lg transition-colors
-                  ${dragging ? 'bg-blue-50' : 'active:bg-gray-50'}`}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
-    >
-      {/* Ligne valeur */}
-      <div className="flex items-baseline justify-center gap-0.5">
-        <span className={`text-sm font-bold leading-none transition-colors
-                          ${dragging ? 'text-blue-600' : display > max ? 'text-orange-500' : 'text-nc-blue'}`}>
-          {display}
-        </span>
-        <span className="text-gray-300 text-xs font-normal">/{max}</span>
-        {dragging && diff !== 0 && (
-          <span className={`text-xs font-bold ml-1 ${diff > 0 ? 'text-green-500' : 'text-red-400'}`}>
-            {diff > 0 ? `+${diff}` : diff}
-          </span>
-        )}
-        {!dragging && (
-          <span className="text-gray-400 text-xs ml-1">{unite}</span>
-        )}
+  if (editing) {
+    return (
+      <div className="flex-1 flex items-center justify-center gap-1.5 px-1">
+        <input
+          ref={inputRef}
+          type="number"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={raw}
+          onChange={e => setRaw(e.target.value)}
+          onBlur={confirm}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirm() } }}
+          className="w-20 text-center font-bold text-lg text-nc-blue border-b-2 border-blue-400
+                     bg-transparent outline-none"
+        />
+        <span className="text-gray-400 text-xs whitespace-nowrap">/ {max} {unite}</span>
+        {/* Bouton OK — onMouseDown pour éviter le blur avant le click */}
+        <button
+          onMouseDown={e => { e.preventDefault(); confirm() }}
+          onTouchStart={e => { e.preventDefault(); confirm() }}
+          className="px-2 py-1 bg-blue-500 text-white text-xs font-semibold rounded-lg
+                     active:scale-95 transition-transform touch-manipulation"
+        >
+          OK
+        </button>
       </div>
+    )
+  }
 
-      {/* Mini barre de progression swipeable */}
+  // Mode affichage : tap pour ouvrir le clavier
+  return (
+    <button
+      onClick={openEdit}
+      className="flex-1 flex flex-col items-center justify-center px-1 py-0.5
+                 rounded-lg active:bg-blue-50 transition-colors touch-manipulation"
+    >
+      <div className="flex items-baseline gap-0.5">
+        <span className="text-base font-bold text-nc-blue leading-none">{value}</span>
+        <span className="text-gray-300 text-xs font-normal">/{max}</span>
+        <span className="text-gray-400 text-xs ml-1">{unite}</span>
+      </div>
+      {/* Barre de progression */}
       <div className="w-full h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-75
-                      ${dragging ? 'bg-blue-400' : display > max ? 'bg-orange-400' : 'bg-nc-red/50'}`}
+          className={`h-full rounded-full ${value > max ? 'bg-orange-400' : 'bg-nc-red/50'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
-
-      {/* Hint icône flèches (uniquement si pas en drag) */}
-      {!dragging && (
-        <p className="text-center text-gray-300 text-[9px] leading-none mt-0.5">⟵ ⟶</p>
-      )}
-    </div>
+    </button>
   )
 }
