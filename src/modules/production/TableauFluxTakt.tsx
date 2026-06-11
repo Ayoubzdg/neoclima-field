@@ -6,11 +6,11 @@ import {
   getTaskTypes
 } from '@/lib/supabase'
 import { buildTaktFlux, getTaktCellBg } from '@/utils/takt'
-import { getSemaineLabel } from '@/utils/dates'
+import { getSemaineLabel, formatDateISO, getMonday } from '@/utils/dates'
 import type { CycleTakt, ZoneTakt, Task, Equipe, TaskType } from '@/types/models'
 import StatusBadge from '@/components/ui/StatusBadge'
 import AlertesBanner from '@/components/ui/AlertesBanner'
-import { X, Plus, Trash2, CheckCircle, Clock, Loader2, Pencil } from 'lucide-react'
+import { X, Plus, Trash2, CheckCircle, Clock, Loader2, Pencil, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────
 // Types locaux
@@ -483,6 +483,11 @@ export default function TableauFluxTakt() {
   const [allTasks, setAllTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null)
+  // Navigation timeline : offset en semaines depuis aujourd'hui
+  const [offsetWeeks, setOffsetWeeks] = useState(-2)
+  const SEMAINES_VISIBLES = 8
+
+  const currentWeekISO = formatDateISO(getMonday(new Date()))
 
   const load = async () => {
     if (!chantier?.id) return
@@ -492,7 +497,7 @@ export default function TableauFluxTakt() {
         getAllCyclesByChantier(chantier.id),
         getZonesByChantier(chantier.id),
         getEquipes(chantier.id),
-        getTasksByChantier(chantier.id),  // pour calcul alertes
+        getTasksByChantier(chantier.id),
       ])
       setCycles(c)
       setZones(z)
@@ -505,7 +510,7 @@ export default function TableauFluxTakt() {
 
   useEffect(() => { load() }, [chantier?.id])
 
-  const flux = buildTaktFlux(zones, cycles, [], 8)
+  const flux = buildTaktFlux(zones, cycles, [], SEMAINES_VISIBLES, offsetWeeks)
 
   const handleCellClick = (zone: ZoneTakt, semaine: string, cycle: CycleTakt | null) => {
     setSelectedCell({ zone, semaine, cycle })
@@ -516,16 +521,81 @@ export default function TableauFluxTakt() {
     load()
   }
 
+  // Période affichée pour le titre de navigation
+  const periodeLabel = flux.semaines.length > 0
+    ? `${getSemaineLabel(flux.semaines[0]).split(' · ')[1]?.split(' – ')[0]} → ${getSemaineLabel(flux.semaines[flux.semaines.length - 1]).split(' · ')[1]?.split(' – ')[1]}`
+    : ''
+
   return (
     <div className="p-4">
-      {/* En-tête */}
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-nc-blue">Tableau de flux Takt</h2>
-        <p className="text-gray-500 text-sm">{chantier?.name} · {zones.length} zones</p>
-        <p className="text-[11px] text-gray-400 mt-0.5">
-          Appuyez sur une cellule pour planifier ou modifier un cycle
-        </p>
+      {/* En-tête + navigation */}
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-nc-blue">Tableau de flux Takt</h2>
+          <p className="text-gray-500 text-sm">{chantier?.name} · {zones.length} zones</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">
+            Appuyez sur une cellule pour planifier ou modifier un cycle
+          </p>
+        </div>
+
+        {/* Contrôles navigation */}
+        <div className="flex items-center gap-1.5 flex-shrink-0 mt-1">
+          {/* Bouton 4 semaines arrière */}
+          <button
+            onClick={() => setOffsetWeeks(o => o - 4)}
+            className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-nc-blue transition-colors text-xs font-medium"
+            title="4 semaines en arrière"
+          >
+            <ChevronLeft size={13} />
+            <ChevronLeft size={13} className="-ml-1.5" />
+          </button>
+          {/* Bouton 1 semaine arrière */}
+          <button
+            onClick={() => setOffsetWeeks(o => o - 1)}
+            className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-nc-blue transition-colors"
+            title="Semaine précédente"
+          >
+            <ChevronLeft size={15} />
+          </button>
+
+          {/* Aujourd'hui */}
+          <button
+            onClick={() => setOffsetWeeks(-2)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              offsetWeeks === -2
+                ? 'bg-nc-blue text-white'
+                : 'border border-gray-200 text-nc-blue hover:bg-blue-50'
+            }`}
+            title="Revenir à aujourd'hui"
+          >
+            <CalendarClock size={12} />
+            Auj.
+          </button>
+
+          {/* Bouton 1 semaine avant */}
+          <button
+            onClick={() => setOffsetWeeks(o => o + 1)}
+            className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-nc-blue transition-colors"
+            title="Semaine suivante"
+          >
+            <ChevronRight size={15} />
+          </button>
+          {/* Bouton 4 semaines avant */}
+          <button
+            onClick={() => setOffsetWeeks(o => o + 4)}
+            className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-nc-blue transition-colors text-xs font-medium"
+            title="4 semaines en avant"
+          >
+            <ChevronRight size={13} />
+            <ChevronRight size={13} className="-ml-1.5" />
+          </button>
+        </div>
       </div>
+
+      {/* Période affichée */}
+      {periodeLabel && (
+        <p className="text-[11px] text-gray-400 -mt-2 mb-3">{periodeLabel}</p>
+      )}
 
       {/* Alertes CA — blocages actifs + retards */}
       {!isLoading && <AlertesBanner allTasks={allTasks} equipes={equipes} />}
@@ -542,14 +612,34 @@ export default function TableauFluxTakt() {
                 <th className="text-left text-xs font-semibold text-gray-500 bg-gray-50 sticky left-0 z-10 w-40 px-3 py-2 border-b border-r border-gray-100">
                   Zone Takt
                 </th>
-                {flux.semaines.map(semaine => (
-                  <th key={semaine} className="text-center text-xs font-medium text-gray-500 bg-gray-50 px-3 py-2 border-b border-gray-100 min-w-[90px]">
-                    {getSemaineLabel(semaine).split(' · ')[0]}
-                    <div className="text-[10px] text-gray-400 font-normal">
-                      {getSemaineLabel(semaine).split(' · ')[1]}
-                    </div>
-                  </th>
-                ))}
+                {flux.semaines.map(semaine => {
+                  const isCurrent = semaine === currentWeekISO
+                  return (
+                    <th
+                      key={semaine}
+                      className={`text-center text-xs font-medium px-3 py-2 border-b border-gray-100 min-w-[90px] relative ${
+                        isCurrent
+                          ? 'bg-nc-blue/8 text-nc-blue'
+                          : 'bg-gray-50 text-gray-500'
+                      }`}
+                    >
+                      {isCurrent && (
+                        <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-px h-0.5 w-8 bg-nc-red rounded-b" />
+                      )}
+                      <span className={isCurrent ? 'font-bold' : ''}>
+                        {getSemaineLabel(semaine).split(' · ')[0]}
+                      </span>
+                      <div className={`text-[10px] font-normal mt-0.5 ${isCurrent ? 'text-nc-blue/70' : 'text-gray-400'}`}>
+                        {getSemaineLabel(semaine).split(' · ')[1]}
+                      </div>
+                      {isCurrent && (
+                        <div className="text-[8px] font-bold text-nc-red uppercase tracking-wide mt-0.5">
+                          Semaine en cours
+                        </div>
+                      )}
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
@@ -565,8 +655,12 @@ export default function TableauFluxTakt() {
                     const cell = flux.cells.get(`${zone.id}-${semaine}`)
                     const cycle = cell?.cycle ?? null
                     const bg = getTaktCellBg(cycle)
+                    const isCurrent = semaine === currentWeekISO
                     return (
-                      <td key={semaine} className="px-1.5 py-1.5 border-b border-gray-100 text-center">
+                      <td
+                        key={semaine}
+                        className={`px-1.5 py-1.5 border-b border-gray-100 text-center ${isCurrent ? 'bg-nc-blue/5' : ''}`}
+                      >
                         <button
                           onClick={() => handleCellClick(zone, semaine, cycle)}
                           className="w-full"
@@ -585,7 +679,11 @@ export default function TableauFluxTakt() {
                               )}
                             </div>
                           ) : (
-                            <div className="w-full h-8 rounded-lg bg-gray-50 border border-dashed border-gray-200 hover:border-nc-blue/40 hover:bg-blue-50/30 transition-colors" />
+                            <div className={`w-full h-8 rounded-lg border border-dashed transition-colors ${
+                              isCurrent
+                                ? 'bg-nc-blue/5 border-nc-blue/30 hover:border-nc-blue/60 hover:bg-nc-blue/10'
+                                : 'bg-gray-50 border-gray-200 hover:border-nc-blue/40 hover:bg-blue-50/30'
+                            }`} />
                           )}
                         </button>
                       </td>

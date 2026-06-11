@@ -20,11 +20,12 @@ export function buildTaktFlux(
   zones: ZoneTakt[],
   cycles: CycleTakt[],
   equipes: Equipe[],
-  nombreSemaines = 8
+  nombreSemaines = 8,
+  startOffset = -2   // offset en semaines depuis la semaine courante
 ): TaktFluxData {
   const monday = getMonday(new Date())
   const semaines = Array.from({ length: nombreSemaines }, (_, i) =>
-    formatDateISO(addWeeks(monday, i - 2)) // 2 semaines passé + 6 à venir
+    formatDateISO(addWeeks(monday, startOffset + i))
   )
 
   const equipeMap = new Map(equipes.map(e => [e.id, e]))
