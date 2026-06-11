@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle, AlertCircle, Clock, Play, Plus, Minus, AlertTriangle, ChevronRight, Moon, QrCode, Users } from 'lucide-react'
 import { useProductionStore } from '@/store/productionStore'
@@ -403,27 +403,29 @@ function InlineTaskCard({
       {/* Actions rapides */}
       {task.status !== 'done' && (
         <div className="flex items-center gap-0 border-t border-gray-100/80 px-1 py-1">
-          {/* Contrôle quantité */}
-          <div className="flex items-center gap-1 flex-1 px-2">
+          {/* Contrôle quantité — swipe ← → ou boutons +/- */}
+          <div className="flex items-center gap-1 flex-1 px-1">
             <button
               onClick={() => onQtyChange(-1)}
               disabled={task.qte_realisee <= 0}
               className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30
-                         flex items-center justify-center active:scale-90 transition-all touch-manipulation"
+                         flex items-center justify-center active:scale-90 transition-all touch-manipulation flex-shrink-0"
             >
               <Minus size={13} />
             </button>
-            <span className="text-sm font-bold text-nc-blue min-w-[2.5rem] text-center">
-              {task.qte_realisee}<span className="text-gray-300 font-normal">/{task.qte_prevue}</span>
-            </span>
+            <SwipeQtyZone
+              value={task.qte_realisee}
+              max={task.qte_prevue}
+              unite={task.unite}
+              onDelta={onQtyChange}
+            />
             <button
               onClick={() => onQtyChange(+1)}
               className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200
-                         flex items-center justify-center active:scale-90 transition-all touch-manipulation"
+                         flex items-center justify-center active:scale-90 transition-all touch-manipulation flex-shrink-0"
             >
               <Plus size={13} />
             </button>
-            <span className="text-xs text-gray-400 ml-1">{task.unite}</span>
           </div>
 
           {/* Bouton blocage */}
@@ -447,6 +449,110 @@ function InlineTaskCard({
             </button>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── Contrôle quantité swipeable ──────────────────────────────
+// Glisse ← pour diminuer, → pour augmenter.
+// Sensibilité auto : 200px = plage complète (0 → cap).
+// Les boutons +/- à côté servent pour ±1 précis.
+
+function SwipeQtyZone({
+  value, max, unite, onDelta
+}: {
+  value: number
+  max: number
+  unite: string
+  onDelta: (delta: number) => void
+}) {
+  const cap = Math.max(max * 2, max + 20)
+  const startXRef  = useRef<number | null>(null)
+  const startValRef = useRef(0)
+  const [localVal, setLocalVal] = useState(value)
+  const [dragging, setDragging] = useState(false)
+
+  // Synchro quand la valeur change depuis le store (après save async)
+  useEffect(() => {
+    if (!dragging) setLocalVal(value)
+  }, [value, dragging])
+
+  const computeVal = (clientX: number) => {
+    if (startXRef.current === null) return value
+    const dx      = clientX - startXRef.current
+    // 200 px = plage entière (0..cap)
+    const delta   = Math.round((dx / 200) * cap)
+    return Math.min(cap, Math.max(0, startValRef.current + delta))
+  }
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    startXRef.current  = e.clientX
+    startValRef.current = value
+    setDragging(true)
+  }
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging || startXRef.current === null) return
+    setLocalVal(computeVal(e.clientX))
+  }
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (startXRef.current === null) return
+    const newVal = computeVal(e.clientX)
+    startXRef.current = null
+    setDragging(false)
+    const delta = newVal - value
+    if (delta !== 0) onDelta(delta)
+  }
+  const onPointerCancel = () => {
+    startXRef.current = null
+    setDragging(false)
+    setLocalVal(value)
+  }
+
+  const display = dragging ? localVal : value
+  const pct     = max > 0 ? Math.min(100, (display / max) * 100) : 0
+  const diff    = display - value
+
+  return (
+    <div
+      className={`flex-1 flex flex-col justify-center cursor-ew-resize select-none touch-none
+                  px-1 py-0.5 rounded-lg transition-colors
+                  ${dragging ? 'bg-blue-50' : 'active:bg-gray-50'}`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+    >
+      {/* Ligne valeur */}
+      <div className="flex items-baseline justify-center gap-0.5">
+        <span className={`text-sm font-bold leading-none transition-colors
+                          ${dragging ? 'text-blue-600' : display > max ? 'text-orange-500' : 'text-nc-blue'}`}>
+          {display}
+        </span>
+        <span className="text-gray-300 text-xs font-normal">/{max}</span>
+        {dragging && diff !== 0 && (
+          <span className={`text-xs font-bold ml-1 ${diff > 0 ? 'text-green-500' : 'text-red-400'}`}>
+            {diff > 0 ? `+${diff}` : diff}
+          </span>
+        )}
+        {!dragging && (
+          <span className="text-gray-400 text-xs ml-1">{unite}</span>
+        )}
+      </div>
+
+      {/* Mini barre de progression swipeable */}
+      <div className="w-full h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-75
+                      ${dragging ? 'bg-blue-400' : display > max ? 'bg-orange-400' : 'bg-nc-red/50'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {/* Hint icône flèches (uniquement si pas en drag) */}
+      {!dragging && (
+        <p className="text-center text-gray-300 text-[9px] leading-none mt-0.5">⟵ ⟶</p>
       )}
     </div>
   )
