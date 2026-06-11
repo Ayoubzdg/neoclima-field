@@ -12,7 +12,8 @@ import {
   getChantiers, createChantierComplet,
   getEntreprises, upsertEntreprise, deleteEntreprise,
   getPersonnesByEntreprise, upsertPersonne, deletePersonne, setPersonneActif,
-  getAccesByPersonne, addAccesChantier, removeAccesChantier
+  getAccesByPersonne, addAccesChantier, removeAccesChantier,
+  syncUtilisateurToPersonne
 } from '@/lib/supabase'
 import type { Equipe, Utilisateur, UserRole, Chantier, Entreprise, Personne, AccesChantier } from '@/types/models'
 import type { NouveauChantierPayload } from '@/lib/supabase'
@@ -177,16 +178,26 @@ function UserEditForm({
     setSaving(true)
     setError(null)
     try {
+      const nomTrim   = form.nom.trim()
+      const prenomTrim = form.prenom.trim() || null
+      const pinTrim   = form.code_pin.trim() || null
+      const equipeId  = form.equipe_id || null
+
       const saved = await upsertUtilisateur({
         ...(user.id ? { id: user.id } : {}),
-        prenom: form.prenom.trim() || null,
-        nom: form.nom.trim(),
+        prenom: prenomTrim,
+        nom: nomTrim,
         role: form.role,
-        equipe_id: form.equipe_id || null,
-        code_pin: form.code_pin.trim() || null,
+        equipe_id: equipeId,
+        code_pin: pinTrim,
         chantier_id: chantierId,
         actif: user.actif ?? true,
       })
+
+      // ── Synchronisation vers la table personnes (nouveau système de login) ──
+      // Sans cette synchro, le changement de PIN ne serait pas visible au login.
+      await syncUtilisateurToPersonne(chantierId, nomTrim, prenomTrim, pinTrim, equipeId)
+
       onSave(saved)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur')

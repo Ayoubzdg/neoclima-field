@@ -1033,6 +1033,68 @@ export async function removeAccesChantier(personneId: string, chantierId: string
   if (error) handleError(error, 'removeAccesChantier')
 }
 
+// ── Sync utilisateur → personnes (double-écriture PIN + équipe) ──
+//
+// Quand l'admin modifie un utilisateur (ancien système), on synchronise
+// automatiquement le PIN et l'équipe dans la table personnes (nouveau système).
+// Sans cette synchro, le nouveau login ne voit jamais les changements de PIN.
+//
+export async function syncUtilisateurToPersonne(
+  chantierId: string,
+  nom: string,
+  prenom: string | null,
+  codePin: string | null,
+  equipeId: string | null
+): Promise<void> {
+  try {
+    // 1. Récupérer l'entreprise_id du chantier (colonne ajoutée par la migration multi-entreprise)
+    const { data: chantierRow } = await supabase
+      .from('chantiers')
+      .select('entreprise_id')
+      .eq('id', chantierId)
+      .single()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const entrepriseId = (chantierRow as any)?.entreprise_id as string | null
+    if (!entrepriseId) return // chantier pas encore rattaché à une entreprise
+
+    // 2. Trouver la personne correspondante par nom (+ prénom si renseigné)
+    const query = supabase
+      .from('personnes')
+      .select('id')
+      .eq('entreprise_id', entrepriseId)
+      .eq('nom', nom)
+      .limit(1)
+
+    const { data: found } = prenom
+      ? await query.eq('prenom', prenom)
+      : await query
+
+    if (!found || found.length === 0) return // personne pas dans le nouveau système
+
+    const personneId = (found[0] as { id: string }).id
+
+    // 3. Mettre à jour le PIN dans personnes
+    if (codePin) {
+      await supabase
+        .from('personnes')
+        .update({ code_pin: codePin })
+        .eq('id', personneId)
+    }
+
+    // 4. Mettre à jour l'équipe dans acces_chantier
+    await supabase
+      .from('acces_chantier')
+      .update({ equipe_id: equipeId })
+      .eq('personne_id', personneId)
+      .eq('chantier_id', chantierId)
+
+  } catch {
+    // Sync non bloquante : si elle échoue, l'utilisateur reste enregistré dans l'ancien système
+    console.warn('[syncUtilisateurToPersonne] sync silently failed')
+  }
+}
+
 // ── SYNC QUEUE ──────────────────────────────────────────────
 
 export async function flushSyncQueue(items: SyncQueueItem[]): Promise<void> {
