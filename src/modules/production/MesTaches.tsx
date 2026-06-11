@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle, AlertCircle, Clock, Play, Plus, Minus, AlertTriangle, ChevronRight, Moon, QrCode } from 'lucide-react'
+import { CheckCircle, AlertCircle, Clock, Play, Plus, Minus, AlertTriangle, ChevronRight, Moon, QrCode, Users } from 'lucide-react'
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
 import { currentMondayISO, formatDateFR, todayISO, addDays, formatDateISO, getSemaineLabel } from '@/utils/dates'
@@ -147,6 +147,28 @@ export default function MesTaches() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin w-8 h-8 border-3 border-nc-red border-t-transparent rounded-full" />
+      </div>
+    )
+  }
+
+  // Aucune équipe assignée → message clair au lieu de liste vide silencieuse
+  if (!equipe) {
+    return (
+      <div className="p-4 max-w-lg mx-auto">
+        <div className="mb-5">
+          <h2 className="text-base font-bold text-nc-blue">{getSemaineLabel(monday)}</h2>
+          <p className="text-gray-400 text-xs mt-0.5">{formatDateFR(today)}</p>
+        </div>
+        <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-5 text-center">
+          <AlertTriangle size={32} className="mx-auto mb-3 text-amber-400" />
+          <p className="font-bold text-nc-blue text-sm mb-1">Aucune équipe assignée</p>
+          <p className="text-sm text-gray-500">
+            Ton compte n'est pas encore rattaché à une équipe sur ce chantier.
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Contacte ton chef de chantier pour qu'il t'assigne à une équipe.
+          </p>
+        </div>
       </div>
     )
   }

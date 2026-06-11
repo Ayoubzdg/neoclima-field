@@ -262,6 +262,21 @@ export async function upsertCycle(cycle: Partial<CycleTakt>): Promise<CycleTakt>
   return data as CycleTakt
 }
 
+export async function deleteCycle(cycleId: string): Promise<void> {
+  // Supprimer d'abord toutes les tâches liées (pas de cascade automatique)
+  const { error: taskErr } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('cycle_id', cycleId)
+  if (taskErr) handleError(taskErr, 'deleteCycle:tasks')
+
+  const { error } = await supabase
+    .from('cycles_takt')
+    .delete()
+    .eq('id', cycleId)
+  if (error) handleError(error, 'deleteCycle')
+}
+
 // ── TASKS ───────────────────────────────────────────────────
 
 export async function getTasksDuJour(equipeId: string, date: string): Promise<Task[]> {

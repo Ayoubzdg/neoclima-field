@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import {
-  getAllCyclesByChantier, getZonesByChantier, upsertCycle,
+  getAllCyclesByChantier, getZonesByChantier, upsertCycle, deleteCycle,
   getTasksByCycle, upsertTask, deleteTask, getEquipes, getTasksByChantier,
   getTaskTypes
 } from '@/lib/supabase'
@@ -10,7 +10,7 @@ import { getSemaineLabel, formatDateISO, getMonday } from '@/utils/dates'
 import type { CycleTakt, ZoneTakt, Task, Equipe, TaskType } from '@/types/models'
 import StatusBadge from '@/components/ui/StatusBadge'
 import AlertesBanner from '@/components/ui/AlertesBanner'
-import { X, Plus, Trash2, CheckCircle, Clock, Loader2, Pencil, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react'
+import { X, Plus, Trash2, CheckCircle, Clock, Loader2, Pencil, ChevronLeft, ChevronRight, CalendarClock, AlertTriangle } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────
 // Types locaux
@@ -50,6 +50,7 @@ function CycleEditModal({
   const [statut, setStatut] = useState<CycleTakt['statut']>(cell.cycle?.statut ?? 'planifie')
   const [noteChef, setNoteChef] = useState(cell.cycle?.note_chef ?? '')
   const [saveOk, setSaveOk] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Types de tâches pré-enregistrés
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([])
@@ -147,6 +148,25 @@ function CycleEditModal({
       setShowTaskForm(false)
     } finally {
       setTaskSaving(false)
+    }
+  }
+
+  // ── Supprimer le cycle entier ───────────────────────────────
+  const handleDeleteCycle = async () => {
+    if (!cycle) return
+    const hasDoneTask = tasks.some(t => t.status !== 'todo')
+    if (hasDoneTask) {
+      alert('Impossible de supprimer ce cycle : des tâches sont en cours ou terminées.')
+      return
+    }
+    if (!confirm(`Supprimer ce cycle (${semaineLabel}) et toutes ses tâches ?`)) return
+    setIsDeleting(true)
+    try {
+      await deleteCycle(cycle.id)
+      onRefresh()
+      onClose()
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -259,6 +279,20 @@ function CycleEditModal({
                     : <Pencil size={15} />
                 }
                 {saveOk ? 'Enregistré !' : 'Enregistrer le cycle'}
+              </button>
+
+              {/* ── Supprimer le cycle ── */}
+              <button
+                onClick={handleDeleteCycle}
+                disabled={isDeleting}
+                className="w-full py-2 rounded-xl border border-red-200 text-red-500 text-sm font-medium
+                           hover:bg-red-50 disabled:opacity-40 flex items-center justify-center gap-2 transition-colors"
+              >
+                {isDeleting
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <AlertTriangle size={14} />
+                }
+                Supprimer ce cycle
               </button>
 
               {/* ── Séparateur tâches ── */}
