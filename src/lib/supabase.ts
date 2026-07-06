@@ -1044,10 +1044,11 @@ export async function syncUtilisateurToPersonne(
   nom: string,
   prenom: string | null,
   codePin: string | null,
-  equipeId: string | null
+  equipeId: string | null,
+  role = 'monteur'
 ): Promise<void> {
   try {
-    // 1. Récupérer l'entreprise_id du chantier (colonne ajoutée par la migration multi-entreprise)
+    // 1. Récupérer l'entreprise_id du chantier
     const { data: chantierRow } = await supabase
       .from('chantiers')
       .select('entreprise_id')
@@ -1058,8 +1059,8 @@ export async function syncUtilisateurToPersonne(
     const entrepriseId = (chantierRow as any)?.entreprise_id as string | null
     if (!entrepriseId) return // chantier pas encore rattaché à une entreprise
 
-    // 2. Trouver la personne correspondante par nom (+ prénom si renseigné)
-    const query = supabase
+    // 2. Chercher une personne existante par (entreprise, nom, prénom)
+    const baseQuery = supabase
       .from('personnes')
       .select('id')
       .eq('entreprise_id', entrepriseId)
@@ -1067,30 +1068,50 @@ export async function syncUtilisateurToPersonne(
       .limit(1)
 
     const { data: found } = prenom
-      ? await query.eq('prenom', prenom)
-      : await query
+      ? await baseQuery.eq('prenom', prenom)
+      : await baseQuery
 
-    if (!found || found.length === 0) return // personne pas dans le nouveau système
+    let personneId: string
 
-    const personneId = (found[0] as { id: string }).id
-
-    // 3. Mettre à jour le PIN dans personnes
-    if (codePin) {
-      await supabase
+    if (!found || found.length === 0) {
+      // ── Nouveau monteur : créer l'entrée dans personnes ──────
+      // code_pin requis NOT NULL → '0000' si pas encore attribué
+      const { data: newPersonne, error: insertErr } = await supabase
         .from('personnes')
-        .update({ code_pin: codePin })
-        .eq('id', personneId)
+        .insert({
+          entreprise_id: entrepriseId,
+          nom,
+          prenom: prenom ?? null,
+          role,
+          code_pin: codePin ?? '0000',
+          actif: true,
+        })
+        .select('id')
+        .single()
+
+      if (insertErr || !newPersonne) return
+      personneId = (newPersonne as { id: string }).id
+    } else {
+      // ── Personne existante : mettre à jour PIN et rôle ───────
+      personneId = (found[0] as { id: string }).id
+      if (codePin) {
+        await supabase
+          .from('personnes')
+          .update({ code_pin: codePin, role })
+          .eq('id', personneId)
+      }
     }
 
-    // 4. Mettre à jour l'équipe dans acces_chantier
+    // 3. Upsert acces_chantier (crée l'accès si absent, met à jour l'équipe sinon)
     await supabase
       .from('acces_chantier')
-      .update({ equipe_id: equipeId })
-      .eq('personne_id', personneId)
-      .eq('chantier_id', chantierId)
+      .upsert(
+        { personne_id: personneId, chantier_id: chantierId, equipe_id: equipeId },
+        { onConflict: 'personne_id,chantier_id' }
+      )
 
   } catch {
-    // Sync non bloquante : si elle échoue, l'utilisateur reste enregistré dans l'ancien système
+    // Sync non bloquante : si elle échoue, l'utilisateur reste dans l'ancien système
     console.warn('[syncUtilisateurToPersonne] sync silently failed')
   }
 }

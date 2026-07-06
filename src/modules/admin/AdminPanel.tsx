@@ -196,7 +196,7 @@ function UserEditForm({
 
       // ── Synchronisation vers la table personnes (nouveau système de login) ──
       // Sans cette synchro, le changement de PIN ne serait pas visible au login.
-      await syncUtilisateurToPersonne(chantierId, nomTrim, prenomTrim, pinTrim, equipeId)
+      await syncUtilisateurToPersonne(chantierId, nomTrim, prenomTrim, pinTrim, equipeId, form.role)
 
       onSave(saved)
     } catch (e) {
