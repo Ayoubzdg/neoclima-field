@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Users, TrendingUp, Calendar } from 'lucide-react'
+import { AlertTriangle, Users, TrendingUp, Calendar, RefreshCw } from 'lucide-react'
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
 import { todayISO, formatDateFR } from '@/utils/dates'
@@ -14,14 +14,19 @@ export default function DashboardChef() {
   const { chantier } = useAuthStore()
   const { allTasks, equipes, effectifs, isLoading, loadAllTasks, loadEquipes, loadEffectifs } = useProductionStore()
   const today = todayISO()
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     if (!chantier?.id) return
-    // Sans filtre date pour voir toutes les tâches (y compris blocages d'autres jours)
     loadAllTasks(chantier.id)
     loadEquipes(chantier.id)
     loadEffectifs(chantier.id, today)
+    setLastRefresh(new Date())
   }, [chantier?.id, today, loadAllTasks, loadEquipes, loadEffectifs])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
 
   const tasksByEquipe = equipes.map(equipe => {
     const tasks = allTasks.filter(t => t.equipe_id === equipe.id)
@@ -58,6 +63,16 @@ export default function DashboardChef() {
           </p>
         </div>
         <div className="flex gap-2">
+          {/* Rafraîchir manuellement — utile si le realtime n'est pas encore activé */}
+          <button
+            onClick={refresh}
+            disabled={isLoading}
+            className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50
+                       active:scale-95 transition-all touch-manipulation"
+            title={`Dernière mise à jour : ${lastRefresh.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`}
+          >
+            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+          </button>
           <button
             onClick={() => navigate('/reporting/bon-travail')}
             className="btn-secondary text-sm py-2 px-3 flex items-center gap-1"

@@ -132,11 +132,26 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   setOnline: (online: boolean) => set({ isOnline: online }),
 
   updateTaskLocal: (taskId: string, updates: Partial<Task>) => {
-    const updateInList = (tasks: Task[]) =>
-      tasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
+    // UPDATE : met à jour si la tâche existe déjà dans la liste
+    // INSERT : ajoute la tâche si elle n'est pas encore présente
+    const upsertInList = (tasks: Task[]) => {
+      const exists = tasks.some(t => t.id === taskId)
+      if (exists) {
+        return tasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
+      }
+      // Nouvelle tâche (INSERT realtime) → ajouter à allTasks seulement
+      return tasks
+    }
+    const addIfNew = (tasks: Task[]) => {
+      const exists = tasks.some(t => t.id === taskId)
+      if (!exists && (updates as Task).id) {
+        return [...tasks, updates as Task]
+      }
+      return upsertInList(tasks)
+    }
     set({
-      tasksDuJour: updateInList(get().tasksDuJour),
-      allTasks: updateInList(get().allTasks)
+      tasksDuJour: upsertInList(get().tasksDuJour),
+      allTasks: addIfNew(get().allTasks)
     })
   }
 }))
