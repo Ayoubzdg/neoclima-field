@@ -7,7 +7,7 @@ import {
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
 import { todayISO, formatDateFR } from '@/utils/dates'
-import { calculerAvancement } from '@/utils/ppc'
+import { calculerAvancementMixte } from '@/utils/ppc'
 import ProgressBar from '@/components/ui/ProgressBar'
 import AlertesBanner from '@/components/ui/AlertesBanner'
 import type { Task, Equipe } from '@/types/models'
@@ -49,7 +49,7 @@ export default function DashboardChef() {
     .map(equipe => {
       const tasks       = allTasks.filter(t => t.equipe_id === equipe.id)
       const effectif    = effectifs.find(e => e.equipe_id === equipe.id)
-      const avancement  = calculerAvancement(tasks)
+      const avancement  = calculerAvancementMixte(tasks)
       const blocked     = tasks.filter(t => t.status === 'blocked').length
       const done        = tasks.filter(t => t.status === 'done').length
       const enCours     = tasks.filter(t => ['en_cours','nappe_h','nappe_b','terminaux','raccordement'].includes(t.status)).length

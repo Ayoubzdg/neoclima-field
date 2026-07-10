@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Printer, Loader2, ClipboardList } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { getEquipes, getTasksByChantier } from '@/lib/supabase'
-import { todayISO, formatDateFR } from '@/utils/dates'
+import { todayISO, formatDateFR, currentMondayISO } from '@/utils/dates'
 import type { Equipe, Task } from '@/types/models'
 
 export default function BonTravail() {
@@ -18,7 +18,7 @@ export default function BonTravail() {
     setIsLoading(true)
     Promise.all([
       getEquipes(chantier.id),
-      getTasksByChantier(chantier.id, { semaine: today })
+      getTasksByChantier(chantier.id, { semaine: currentMondayISO() })
     ]).then(([eq, tk]) => {
       setEquipes(eq)
       setTasks(tk)
