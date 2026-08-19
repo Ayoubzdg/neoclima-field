@@ -2,6 +2,13 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import Layout from '@/components/layout/Layout'
 import LoginScreen from '@/components/auth/LoginScreen'
 import ProtectedRoute from '@/components/auth/ProtectedRoute'
+import RequireRole from '@/components/auth/RequireRole'
+import type { UserRole } from '@/types/models'
+
+/** Garde de route par rôle — bloque l'accès par URL, pas seulement le menu */
+const guard = (roles: UserRole[], element: React.ReactNode) => (
+  <RequireRole roles={roles}>{element}</RequireRole>
+)
 
 // Module Production
 import MesTaches from '@/modules/production/MesTaches'
@@ -66,45 +73,45 @@ export const router = createBrowserRouter([
       { path: 'production', element: <MesTaches /> },
       { path: 'production/tache/:id', element: <TacheDetail /> },
       { path: 'production/scan', element: <QRScanner /> },
-      { path: 'production/chef', element: <DashboardChef /> },
-      { path: 'production/controle', element: <ControleTaches /> },
-      { path: 'production/takt', element: <TableauFluxTakt /> },
-      { path: 'production/blocages', element: <BlocagesUrgents /> },
+      { path: 'production/chef', element: guard(['chef_equipe', 'chef', 'ca', 'admin'], <DashboardChef />) },
+      { path: 'production/controle', element: guard(['chef', 'ca', 'admin'], <ControleTaches />) },
+      { path: 'production/takt', element: guard(['chef', 'ca', 'admin'], <TableauFluxTakt />) },
+      { path: 'production/blocages', element: guard(['chef_equipe', 'chef', 'ca', 'admin'], <BlocagesUrgents />) },
 
       // ── Planning ────────────────────────────────────────
-      { path: 'planning', element: <GanttChantier /> },
-      { path: 'planning/lookahead', element: <Lookahead /> },
-      { path: 'planning/weekly', element: <WeeklyPlan /> },
-      { path: 'planning/ppc', element: <PpcDashboard /> },
-      { path: 'planning/contraintes', element: <ContraintesAgenda /> },
+      { path: 'planning', element: guard(['chef', 'ca', 'admin'], <GanttChantier />) },
+      { path: 'planning/lookahead', element: guard(['chef', 'ca', 'admin'], <Lookahead />) },
+      { path: 'planning/weekly', element: guard(['chef', 'ca', 'admin'], <WeeklyPlan />) },
+      { path: 'planning/ppc', element: guard(['chef', 'ca', 'admin'], <PpcDashboard />) },
+      { path: 'planning/contraintes', element: guard(['chef', 'ca', 'admin'], <ContraintesAgenda />) },
 
       // ── Plans ───────────────────────────────────────────
       { path: 'plans', element: <ZonesList /> },
       { path: 'plans/zone/:id', element: <PlanViewer /> },
       { path: 'plans/zone/:id/viewer', element: <PlanViewer /> },
-      { path: 'plans/qr', element: <QrCodePrint /> },
+      { path: 'plans/qr', element: guard(['ca', 'admin'], <QrCodePrint />) },
 
       // ── Qualité ─────────────────────────────────────────
-      { path: 'qualite', element: <NonConformites /> },
-      { path: 'qualite/nc/:id', element: <NcDetail /> },
-      { path: 'qualite/mesures', element: <Mesures /> },
+      { path: 'qualite', element: guard(['chef', 'ca', 'admin'], <NonConformites />) },
+      { path: 'qualite/nc/:id', element: guard(['chef', 'ca', 'admin'], <NcDetail />) },
+      { path: 'qualite/mesures', element: guard(['chef', 'ca', 'admin'], <Mesures />) },
 
       // ── Équipes ─────────────────────────────────────────
-      { path: 'equipes', element: <EquipesList /> },
-      { path: 'equipes/effectifs', element: <Effectifs /> },
+      { path: 'equipes', element: guard(['chef', 'ca', 'admin'], <EquipesList />) },
+      { path: 'equipes/effectifs', element: guard(['chef_equipe', 'chef', 'ca', 'admin'], <Effectifs />) },
 
       // ── Reporting ───────────────────────────────────────
-      { path: 'reporting', element: <RapportHebdo /> },
-      { path: 'reporting/bon-travail', element: <BonTravail /> },
+      { path: 'reporting', element: guard(['ca', 'admin'], <RapportHebdo />) },
+      { path: 'reporting/bon-travail', element: guard(['chef', 'ca', 'admin'], <BonTravail />) },
 
       // ── Paramètres ──────────────────────────────────────
-      { path: 'parametres', element: <ParamChantier /> },
-      { path: 'parametres/equipes', element: <ParamEquipes /> },
-      { path: 'parametres/task-types', element: <ParamTaskTypes /> },
-      { path: 'parametres/zones', element: <ParamZones /> },
+      { path: 'parametres', element: guard(['ca', 'admin'], <ParamChantier />) },
+      { path: 'parametres/equipes', element: guard(['ca', 'admin'], <ParamEquipes />) },
+      { path: 'parametres/task-types', element: guard(['ca', 'admin'], <ParamTaskTypes />) },
+      { path: 'parametres/zones', element: guard(['chef', 'ca', 'admin'], <ParamZones />) },
 
       // ── Admin ────────────────────────────────────────────
-      { path: 'admin', element: <AdminPanel /> },
+      { path: 'admin', element: guard(['admin'], <AdminPanel />) },
 
       // ── Route QR direct (depuis scan physique) ──────────
       { path: 'zone/:qrCode', element: <PlanViewer /> },

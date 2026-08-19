@@ -25,10 +25,17 @@ function StatusIcon({ status }: { status: string }) {
 // ── Dashboard principal ──────────────────────────────────────
 export default function DashboardChef() {
   const navigate  = useNavigate()
-  const { chantier } = useAuthStore()
-  const { allTasks, equipes, effectifs, isLoading, loadAllTasks, loadEquipes, loadEffectifs } = useProductionStore()
+  const { chantier, role, entrepriseId, entrepriseName } = useAuthStore()
+  const { allTasks: allTasksRaw, equipes: equipesRaw, effectifs, isLoading, loadAllTasks, loadEquipes, loadEffectifs } = useProductionStore()
   const today = todayISO()
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+
+  // ── Cloisonnement sous-traitant ─────────────────────────────
+  // Un chef d'équipe ST ne voit que les équipes et tâches de
+  // SON entreprise (filtrage app ; l'étanchéité serveur = RLS)
+  const isST = role === 'chef_equipe' && !!entrepriseId
+  const equipes  = isST ? equipesRaw.filter(e => e.entreprise_id === entrepriseId) : equipesRaw
+  const allTasks = isST ? allTasksRaw.filter(t => t.entreprise_id === entrepriseId) : allTasksRaw
 
   const refresh = useCallback(() => {
     if (!chantier?.id) return
@@ -56,8 +63,11 @@ export default function DashboardChef() {
 
   const totalBlocages   = allTasks.filter(t => t.status === 'blocked').length
   const totalAControler = allTasks.filter(t => t.status === 'a_controler').length
-  const totalPresents  = effectifs.reduce((s, e) => s + e.monteurs_presents, 0)
-  const totalPrevus    = effectifs.reduce((s, e) => s + e.monteurs_prevus, 0)
+  const effectifsVisibles = isST
+    ? effectifs.filter(e => equipes.some(eq => eq.id === e.equipe_id))
+    : effectifs
+  const totalPresents  = effectifsVisibles.reduce((s, e) => s + e.monteurs_presents, 0)
+  const totalPrevus    = effectifsVisibles.reduce((s, e) => s + e.monteurs_prevus, 0)
   const avanTotal      = tasksByEquipe.length
     ? Math.round(tasksByEquipe.reduce((s, e) => s + e.avancement, 0) / tasksByEquipe.length)
     : 0
@@ -71,7 +81,10 @@ export default function DashboardChef() {
       <div className="flex items-start justify-between mb-4">
         <div>
           <h2 className="text-lg font-bold text-nc-blue">{chantier?.name}</h2>
-          <p className="text-gray-500 text-sm">{formatDateFR(today)}</p>
+          <p className="text-gray-500 text-sm">
+            {formatDateFR(today)}
+            {isST && entrepriseName && <span className="ml-1 text-nc-blue font-medium">· {entrepriseName}</span>}
+          </p>
           <div className="flex items-center gap-3 mt-1 text-sm">
             <span className={totalPresents < totalPrevus ? 'text-amber-600 font-medium' : 'text-green-600 font-medium'}>
               {totalPresents}/{totalPrevus} présents
@@ -140,14 +153,17 @@ export default function DashboardChef() {
 
       {/* ── Actions rapides ── */}
       <div className="flex gap-2 mt-5 flex-wrap">
-        <button
-          onClick={() => navigate('/production/controle')}
-          className={`flex-1 min-w-[110px] text-sm flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold transition-colors
-            ${totalAControler > 0 ? 'bg-amber-500 text-white' : 'btn-secondary'}`}
-        >
-          <CheckCircle size={15} />
-          Contrôle{totalAControler > 0 ? ` (${totalAControler})` : ''}
-        </button>
+        {/* Le contrôle est réservé à l'interne (jamais d'auto-validation ST) */}
+        {!isST && (
+          <button
+            onClick={() => navigate('/production/controle')}
+            className={`flex-1 min-w-[110px] text-sm flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold transition-colors
+              ${totalAControler > 0 ? 'bg-amber-500 text-white' : 'btn-secondary'}`}
+          >
+            <CheckCircle size={15} />
+            Contrôle{totalAControler > 0 ? ` (${totalAControler})` : ''}
+          </button>
+        )}
         <button
           onClick={() => navigate('/production/blocages')}
           className={`flex-1 min-w-[110px] text-sm flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold transition-colors
@@ -156,12 +172,16 @@ export default function DashboardChef() {
           <AlertTriangle size={15} />
           Blocages{totalBlocages > 0 ? ` (${totalBlocages})` : ''}
         </button>
-        <button onClick={() => navigate('/planning/ppc')} className="flex-1 min-w-[90px] btn-secondary text-sm flex items-center justify-center gap-1.5">
-          <TrendingUp size={15} /> PPC
-        </button>
-        <button onClick={() => navigate('/reporting/bon-travail')} className="flex-1 min-w-[90px] btn-secondary text-sm flex items-center justify-center gap-1.5">
-          <Calendar size={15} /> Bon travail
-        </button>
+        {!isST && (
+          <>
+            <button onClick={() => navigate('/planning/ppc')} className="flex-1 min-w-[90px] btn-secondary text-sm flex items-center justify-center gap-1.5">
+              <TrendingUp size={15} /> PPC
+            </button>
+            <button onClick={() => navigate('/reporting/bon-travail')} className="flex-1 min-w-[90px] btn-secondary text-sm flex items-center justify-center gap-1.5">
+              <Calendar size={15} /> Bon travail
+            </button>
+          </>
+        )}
         <button onClick={() => navigate('/plans')} className="flex-1 min-w-[90px] btn-secondary text-sm flex items-center justify-center gap-1.5">
           <Users size={15} /> Plans
         </button>

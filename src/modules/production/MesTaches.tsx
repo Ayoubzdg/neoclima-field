@@ -86,9 +86,9 @@ export default function MesTaches() {
     }
   }, [equipe?.id, monday, loadTasksDuJour])
 
-  // Rediriger chef/CA vers le dashboard approprié
+  // Rediriger chef/chef d'équipe/CA vers le dashboard approprié
   useEffect(() => {
-    if (role === 'chef') navigate('/production/chef', { replace: true })
+    if (role === 'chef' || role === 'chef_equipe') navigate('/production/chef', { replace: true })
     if (role === 'ca') navigate('/production/takt', { replace: true })
   }, [role, navigate])
 

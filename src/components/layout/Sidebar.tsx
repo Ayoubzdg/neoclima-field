@@ -16,11 +16,11 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Production',
     items: [
       { to: '/production',            icon: <ClipboardList size={18} />, label: 'Mes tâches',      roles: ['monteur', 'chef', 'ca', 'admin'] },
-      { to: '/production/chef',       icon: <HardHat size={18} />,       label: 'Dashboard chef',  roles: ['chef', 'ca', 'admin'] },
+      { to: '/production/chef',       icon: <HardHat size={18} />,       label: 'Dashboard chef',  roles: ['chef_equipe', 'chef', 'ca', 'admin'] },
       { to: '/production/controle',   icon: <ShieldCheck size={18} />,   label: 'Contrôle travaux', roles: ['chef', 'ca', 'admin'] },
       { to: '/production/takt',       icon: <BarChart2 size={18} />,     label: 'Tableau de flux', roles: ['chef', 'ca', 'admin'] },
-      { to: '/production/blocages',   icon: <Shield size={18} />,        label: 'Blocages urgents',roles: ['chef', 'ca', 'admin'] },
-      { to: '/production/scan',       icon: <QrCode size={18} />,        label: 'Scanner QR',      roles: ['monteur', 'chef', 'ca', 'admin'] },
+      { to: '/production/blocages',   icon: <Shield size={18} />,        label: 'Blocages urgents',roles: ['chef_equipe', 'chef', 'ca', 'admin'] },
+      { to: '/production/scan',       icon: <QrCode size={18} />,        label: 'Scanner QR',      roles: ['monteur', 'chef_equipe', 'chef', 'ca', 'admin'] },
     ]
   },
   {
@@ -36,7 +36,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Plans',
     items: [
-      { to: '/plans',    icon: <Map size={18} />,   label: 'Zones & Plans', roles: ['monteur', 'chef', 'ca', 'admin'] },
+      { to: '/plans',    icon: <Map size={18} />,   label: 'Zones & Plans', roles: ['monteur', 'chef_equipe', 'chef', 'ca', 'admin'] },
       { to: '/plans/qr', icon: <QrCode size={18} />,label: 'Imprimer QR',  roles: ['ca', 'admin'] },
     ]
   },
@@ -51,7 +51,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Équipes',
     items: [
       { to: '/equipes',           icon: <Users size={18} />,        label: 'Équipes',   roles: ['chef', 'ca', 'admin'] },
-      { to: '/equipes/effectifs', icon: <ClipboardList size={18} />,label: 'Effectifs', roles: ['chef', 'ca', 'admin'] },
+      { to: '/equipes/effectifs', icon: <ClipboardList size={18} />,label: 'Effectifs', roles: ['chef_equipe', 'chef', 'ca', 'admin'] },
     ]
   },
   {
@@ -146,7 +146,9 @@ export default function Sidebar({ onNavClick }: Props) {
             <p className="text-xs font-semibold text-gray-800 truncate">
               {utilisateur?.prenom} {utilisateur?.nom}
             </p>
-            <p className="text-[10px] text-gray-400 capitalize">{role}</p>
+            <p className="text-[10px] text-gray-400 capitalize">
+              {role === 'chef_equipe' ? "chef d'équipe" : role}
+            </p>
           </div>
         </div>
         <button

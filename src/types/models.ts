@@ -22,7 +22,12 @@ export type NcGravite = 'mineure' | 'majeure' | 'bloquante'
 export type NcStatut = 'ouverte' | 'en_cours' | 'levee' | 'validee'
 export type MesureType = 'debit' | 'pression' | 'etancheite' | 'bruit' | 'temperature' | 'autre'
 export type PhotoType = 'general' | 'blocage' | 'nc' | 'reception' | 'avant' | 'apres'
-export type UserRole = 'monteur' | 'chef' | 'ca' | 'admin'
+/**
+ * chef_equipe = responsable sous-traitant : voit toutes les équipes
+ * de SON entreprise, déclare les effectifs, mais ne valide jamais
+ * définitivement ses propres prestations.
+ */
+export type UserRole = 'monteur' | 'chef_equipe' | 'chef' | 'ca' | 'admin'
 export type WeeklyPlanStatut = 'brouillon' | 'engage' | 'cloture'
 export type CauseNonCompletion = 'contrainte_non_levee' | 'ressource_insuffisante' | 'plan_non_disponible' | 'autre'
 export type SyncOperation = 'insert' | 'update' | 'delete'
@@ -47,6 +52,8 @@ export interface Chantier {
 export interface Equipe {
   id: string
   chantier_id: string | null
+  /** Entreprise propriétaire (cloisonnement sous-traitants) */
+  entreprise_id: string | null
   name: string
   couleur: string
   code_pin: string | null
@@ -160,6 +167,8 @@ export interface Task {
   zone_takt_id: string | null
   task_type_id: string | null
   equipe_id: string | null
+  /** Héritée de l'équipe via trigger DB (cloisonnement sous-traitants) */
+  entreprise_id: string | null
   label: string
   description: string | null
   qte_prevue: number
@@ -460,6 +469,9 @@ export interface LoginPersonneResult {
   prenom: string | null
   role: UserRole
   equipe_id: string | null
+  /** Renseignés par la version enrichie du RPC (cloisonnement) */
+  entreprise_id?: string | null
+  entreprise_name?: string | null
   chantier_id: string
   chantier_name: string
   chantier_client: string | null

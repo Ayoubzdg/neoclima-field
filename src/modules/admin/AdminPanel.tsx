@@ -23,10 +23,11 @@ import type { NouveauChantierPayload } from '@/lib/supabase'
 // ─────────────────────────────────────────────────────────────
 
 const ROLES: { value: UserRole; label: string; color: string; bg: string }[] = [
-  { value: 'monteur',  label: 'Monteur', color: 'text-gray-700',  bg: 'bg-gray-100' },
-  { value: 'chef',     label: 'Chef',    color: 'text-blue-700',  bg: 'bg-blue-100' },
-  { value: 'ca',       label: 'C.A.',    color: 'text-purple-700', bg: 'bg-purple-100' },
-  { value: 'admin',    label: 'Admin',   color: 'text-red-700',   bg: 'bg-red-100' },
+  { value: 'monteur',     label: 'Monteur',        color: 'text-gray-700',   bg: 'bg-gray-100' },
+  { value: 'chef_equipe', label: "Chef d'équipe",  color: 'text-amber-700',  bg: 'bg-amber-100' },
+  { value: 'chef',        label: 'Chef',           color: 'text-blue-700',   bg: 'bg-blue-100' },
+  { value: 'ca',          label: 'C.A.',           color: 'text-purple-700', bg: 'bg-purple-100' },
+  { value: 'admin',       label: 'Admin',          color: 'text-red-700',    bg: 'bg-red-100' },
 ]
 
 function getRoleMeta(role: UserRole) {
@@ -249,6 +250,7 @@ function UserEditForm({
         </div>
         <p className="text-[10px] text-gray-400 mt-1">
           {form.role === 'monteur' && 'Voit ses tâches uniquement. Pas d\'accès planning ni paramètres.'}
+          {form.role === 'chef_equipe' && 'Responsable sous-traitant : voit les équipes et tâches de SON entreprise, déclare les effectifs. Ne valide jamais ses propres travaux.'}
           {form.role === 'chef' && 'Voit tout le chantier, planning, équipes. Ne peut pas modifier les paramètres.'}
           {form.role === 'ca' && 'Chargé d\'affaires : accès complet sauf gestion des comptes.'}
           {form.role === 'admin' && 'Accès total y compris gestion des utilisateurs et paramètres avancés.'}
@@ -690,10 +692,11 @@ function ProjetsTab() {
 // ─────────────────────────────────────────────────────────────
 
 const ROLES_LIST: { value: UserRole; label: string; color: string }[] = [
-  { value: 'monteur', label: 'Monteur',  color: 'text-gray-700' },
-  { value: 'chef',    label: 'Chef',     color: 'text-blue-700' },
-  { value: 'ca',      label: 'C.A.',     color: 'text-purple-700' },
-  { value: 'admin',   label: 'Admin',    color: 'text-red-700' },
+  { value: 'monteur',     label: 'Monteur',       color: 'text-gray-700' },
+  { value: 'chef_equipe', label: "Chef d'équipe", color: 'text-amber-700' },
+  { value: 'chef',        label: 'Chef',          color: 'text-blue-700' },
+  { value: 'ca',          label: 'C.A.',          color: 'text-purple-700' },
+  { value: 'admin',       label: 'Admin',         color: 'text-red-700' },
 ]
 
 function PersonneRow({

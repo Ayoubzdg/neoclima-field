@@ -16,7 +16,7 @@ import ProgressBar from '@/components/ui/ProgressBar'
 export default function ZoneTasksView() {
   const { qrCode, id } = useParams<{ qrCode?: string; id?: string }>()
   const navigate = useNavigate()
-  const { role, equipe } = useAuthStore()
+  const { role, equipe, entrepriseId } = useAuthStore()
   const { updateStatus } = useProductionStore()
 
   const [zone, setZone] = useState<ZoneTakt | null>(null)
@@ -43,10 +43,15 @@ export default function ZoneTasksView() {
       }
       if (z) {
         setZone(z)
-        const t = await getTasksByZone(z.id, {
+        let t = await getTasksByZone(z.id, {
           equipeId: filtreEquipe && equipe?.id ? equipe.id : undefined,
           semaine: semaineCourante,
         })
+        // Cloisonnement : un chef d'équipe ST ne voit que les tâches
+        // de SON entreprise, même filtre équipe désactivé
+        if (role === 'chef_equipe' && entrepriseId) {
+          t = t.filter(task => task.entreprise_id === entrepriseId)
+        }
         setTasks(t)
       }
     }
@@ -99,7 +104,7 @@ export default function ZoneTasksView() {
         </div>
         <div className="flex items-center gap-1">
           {/* Toggle filtre équipe (chef peut le désactiver pour voir tout) */}
-          {(role === 'chef' || role === 'ca' || role === 'admin') && equipe && (
+          {(role === 'chef_equipe' || role === 'chef' || role === 'ca' || role === 'admin') && equipe && (
             <button
               onClick={() => setFiltreEquipe(f => !f)}
               className={`p-1.5 rounded-xl transition-colors ${filtreEquipe ? 'bg-white/20' : 'hover:bg-white/10'}`}

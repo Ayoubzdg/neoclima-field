@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react'
 import { Users, Plus, Edit2, Trash2, Save, X, Eye, EyeOff, Check } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { getEquipes, getUtilisateurs, upsertEquipe, upsertUtilisateur, deleteUtilisateur } from '@/lib/supabase'
-import type { Equipe, Utilisateur, UserRole } from '@/types/models'
+import { getEquipes, getUtilisateurs, upsertEquipe, upsertUtilisateur, deleteUtilisateur, getEntreprises } from '@/lib/supabase'
+import type { Equipe, Utilisateur, UserRole, Entreprise } from '@/types/models'
 
 const COLORS = ['#E74C3C', '#2C3E50', '#3498DB', '#27AE60', '#F39C12', '#9B59B6', '#1ABC9C', '#E67E22']
-const ROLES: UserRole[] = ['monteur', 'chef', 'ca', 'admin']
+const ROLES: UserRole[] = ['monteur', 'chef_equipe', 'chef', 'ca', 'admin']
 
 // ── Inline edit form for equipe header ──────────────────────
-function EquipeEditRow({ equipe, onSave, onCancel }: {
+function EquipeEditRow({ equipe, entreprises, onSave, onCancel }: {
   equipe: Partial<Equipe>
+  entreprises: Entreprise[]
   onSave: (eq: Partial<Equipe>) => void
   onCancel: () => void
 }) {
-  const [form, setForm] = useState({ name: equipe.name ?? '', couleur: equipe.couleur ?? COLORS[0], code_pin: equipe.code_pin ?? '' })
+  const [form, setForm] = useState({
+    name: equipe.name ?? '',
+    couleur: equipe.couleur ?? COLORS[0],
+    code_pin: equipe.code_pin ?? '',
+    entreprise_id: equipe.entreprise_id ?? '',
+  })
   return (
     <div className="px-4 py-3 flex items-center gap-2 flex-wrap border-b border-gray-100">
       <input
@@ -40,8 +46,19 @@ function EquipeEditRow({ equipe, onSave, onCancel }: {
         placeholder="PIN équipe"
         maxLength={6}
       />
+      {/* Entreprise propriétaire — indispensable pour le cloisonnement ST */}
+      <select
+        className="border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/20"
+        value={form.entreprise_id}
+        onChange={e => setForm(f => ({ ...f, entreprise_id: e.target.value }))}
+      >
+        <option value="">— Entreprise —</option>
+        {entreprises.map(e => (
+          <option key={e.id} value={e.id}>{e.name}</option>
+        ))}
+      </select>
       <button
-        onClick={() => onSave(form)}
+        onClick={() => onSave({ ...form, entreprise_id: form.entreprise_id || null })}
         disabled={!form.name.trim()}
         className="p-1.5 rounded-lg bg-nc-blue text-white hover:bg-nc-blue-dark disabled:opacity-40"
       >
@@ -129,6 +146,7 @@ export default function ParamEquipes() {
   const { chantier } = useAuthStore()
   const [equipes, setEquipes] = useState<Equipe[]>([])
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([])
+  const [entreprises, setEntreprises] = useState<Entreprise[]>([])
   const [showPins, setShowPins] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -147,8 +165,8 @@ export default function ParamEquipes() {
   useEffect(() => {
     if (!chantier?.id) return
     setIsLoading(true)
-    Promise.all([getEquipes(chantier.id), getUtilisateurs(chantier.id)])
-      .then(([eq, us]) => { setEquipes(eq); setUtilisateurs(us) })
+    Promise.all([getEquipes(chantier.id), getUtilisateurs(chantier.id), getEntreprises()])
+      .then(([eq, us, ents]) => { setEquipes(eq); setUtilisateurs(us); setEntreprises(ents) })
       .finally(() => setIsLoading(false))
   }, [chantier?.id])
 
@@ -213,6 +231,7 @@ export default function ParamEquipes() {
                 {isEditingThis ? (
                   <EquipeEditRow
                     equipe={equipe}
+                    entreprises={entreprises}
                     onSave={saveEquipe}
                     onCancel={() => setEditingEquipeId(null)}
                   />
@@ -222,6 +241,11 @@ export default function ParamEquipes() {
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: equipe.couleur }} />
                       <p className="font-bold text-nc-blue">{equipe.name}</p>
                       <span className="text-xs text-gray-400">{membres.length} membre{membres.length !== 1 ? 's' : ''}</span>
+                      {equipe.entreprise_id && (
+                        <span className="text-[10px] bg-blue-50 text-nc-blue px-1.5 py-0.5 rounded font-medium">
+                          {entreprises.find(x => x.id === equipe.entreprise_id)?.name ?? 'Entreprise'}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       {showPins && equipe.code_pin && (
@@ -311,6 +335,7 @@ export default function ParamEquipes() {
           {addingEquipe ? (
             <div className="bg-white rounded-2xl border border-nc-blue/30 shadow-sm overflow-hidden">
               <EquipeEditRow
+                entreprises={entreprises}
                 equipe={{ couleur: COLORS[equipes.length % COLORS.length] }}
                 onSave={saveEquipe}
                 onCancel={() => setAddingEquipe(false)}

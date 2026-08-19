@@ -17,7 +17,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function BlocagesUrgents() {
   const navigate = useNavigate()
-  const { chantier } = useAuthStore()
+  const { chantier, role, entrepriseId } = useAuthStore()
   const { allTasks, isLoading, loadAllTasks, updateStatus } = useProductionStore()
   const today = todayISO()
 
@@ -28,10 +28,15 @@ export default function BlocagesUrgents() {
     }
   }, [chantier?.id, loadAllTasks])
 
-  const blockedTasks = allTasks.filter(t => t.status === 'blocked')
+  // Cloisonnement : un chef d'équipe ST ne voit que les blocages
+  // de SON entreprise
+  const isST = role === 'chef_equipe' && !!entrepriseId
+  const blockedTasks = allTasks
+    .filter(t => t.status === 'blocked')
+    .filter(t => !isST || t.entreprise_id === entrepriseId)
 
   const handleLever = async (task: Task) => {
-    await updateStatus(task.id, 'en_cours', { type_blocage: null, comment: null }, 'chef')
+    await updateStatus(task.id, 'en_cours', { type_blocage: null, comment: null }, role ?? 'chef')
   }
 
   return (

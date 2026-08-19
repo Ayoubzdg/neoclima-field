@@ -6,7 +6,7 @@ import type { Equipe, Effectif } from '@/types/models'
 import { Save, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function Effectifs() {
-  const { chantier } = useAuthStore()
+  const { chantier, role, entrepriseId } = useAuthStore()
   const [equipes, setEquipes] = useState<Equipe[]>([])
   const [effectifs, setEffectifs] = useState<Effectif[]>([])
   const [date, setDate] = useState(todayISO())
@@ -20,7 +20,12 @@ export default function Effectifs() {
     Promise.all([
       getEquipes(chantier.id),
       getEffectifs(chantier.id, date)
-    ]).then(([eq, eff]) => {
+    ]).then(([eqAll, eff]) => {
+      // Cloisonnement : un chef d'équipe ST ne déclare que
+      // les effectifs de SES équipes
+      const eq = role === 'chef_equipe' && entrepriseId
+        ? eqAll.filter(e => e.entreprise_id === entrepriseId)
+        : eqAll
       setEquipes(eq)
       setEffectifs(eff)
       const local: Record<string, { prevus: number; presents: number }> = {}
@@ -30,7 +35,7 @@ export default function Effectifs() {
       })
       setLocalEffectifs(local)
     }).finally(() => setIsLoading(false))
-  }, [chantier?.id, date])
+  }, [chantier?.id, date, role, entrepriseId])
 
   const handleSave = async () => {
     if (!chantier?.id) return

@@ -10,6 +10,9 @@ interface AuthState {
   chantier: Chantier | null
   equipe: Equipe | null
   role: UserRole | null
+  /** Entreprise de la session (cloisonnement sous-traitants) */
+  entrepriseId: string | null
+  entrepriseName: string | null
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
@@ -41,6 +44,8 @@ export const useAuthStore = create<AuthState>()(
       chantier: null,
       equipe: null,
       role: null,
+      entrepriseId: null,
+      entrepriseName: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -124,7 +129,7 @@ export const useAuthStore = create<AuthState>()(
           // Construire l'objet Personne
           const personne: Personne = {
             id: result.personne_id,
-            entreprise_id: '',  // non critique pour la session
+            entreprise_id: result.entreprise_id ?? '',
             nom: result.nom,
             prenom: result.prenom,
             role: result.role,
@@ -165,6 +170,8 @@ export const useAuthStore = create<AuthState>()(
             chantier,
             equipe,
             role: result.role,
+            entrepriseId: result.entreprise_id ?? null,
+            entrepriseName: result.entreprise_name ?? null,
             isAuthenticated: true,
             isLoading: false,
             error: null,
@@ -186,6 +193,8 @@ export const useAuthStore = create<AuthState>()(
           chantier: null,
           equipe: null,
           role: null,
+          entrepriseId: null,
+          entrepriseName: null,
           isAuthenticated: false,
           error: null,
           codeEntrepriseSession: null
@@ -207,6 +216,8 @@ export const useAuthStore = create<AuthState>()(
         chantier: state.chantier,
         equipe: state.equipe,
         role: state.role,
+        entrepriseId: state.entrepriseId,
+        entrepriseName: state.entrepriseName,
         isAuthenticated: state.isAuthenticated
       })
     }

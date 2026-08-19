@@ -14,19 +14,19 @@ const NAV_ITEMS: NavItem[] = [
     to: '/production',
     icon: <ClipboardList size={22} />,
     label: 'Production',
-    roles: ['monteur', 'chef', 'ca', 'admin']
+    roles: ['monteur', 'chef_equipe', 'chef', 'ca', 'admin']
   },
   {
     to: '/production/blocages',
     icon: <AlertTriangle size={22} />,
     label: 'Blocages',
-    roles: ['chef', 'ca', 'admin']
+    roles: ['chef_equipe', 'chef', 'ca', 'admin']
   },
   {
     to: '/plans',
     icon: <Map size={22} />,
     label: 'Plans',
-    roles: ['monteur', 'chef', 'ca', 'admin']
+    roles: ['monteur', 'chef_equipe', 'chef', 'ca', 'admin']
   },
   {
     to: '/qualite',
