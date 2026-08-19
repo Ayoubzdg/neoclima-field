@@ -1,5 +1,10 @@
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { useUiStore } from '@/store/uiStore'
+
+function toast(type: 'error' | 'success' | 'info', message: string) {
+  useUiStore.getState().addNotification({ type, message, autoDismiss: type !== 'error' })
+}
 
 /**
  * ABONNEMENT AUX NOTIFICATIONS PUSH (Web Push / VAPID)
@@ -34,20 +39,37 @@ export function pushActif(): boolean {
  * Retourne true si l'abonnement est actif.
  */
 export async function activerNotifications(): Promise<boolean> {
-  if (!pushDisponible()) return false
-
-  const permission = await Notification.requestPermission()
-  if (permission !== 'granted') return false
-
-  const reg = await navigator.serviceWorker.ready
-  let sub = await reg.pushManager.getSubscription()
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-    })
+  if (!pushDisponible()) {
+    toast('error', 'Notifications non disponibles sur cet appareil/navigateur')
+    return false
   }
 
+  // 1. Permission système
+  const permission = await Notification.requestPermission()
+  if (permission !== 'granted') {
+    toast('error', permission === 'denied'
+      ? 'Permission refusée — autorise les notifications dans les Réglages du téléphone (Notifications → Neoclima Field), ou réinstalle l\'app'
+      : 'Permission non accordée')
+    return false
+  }
+
+  // 2. Abonnement navigateur (VAPID)
+  let sub: PushSubscription | null = null
+  try {
+    const reg = await navigator.serviceWorker.ready
+    sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      })
+    }
+  } catch (e) {
+    toast('error', `Échec abonnement : ${e instanceof Error ? e.message : 'erreur navigateur'}`)
+    return false
+  }
+
+  // 3. Enregistrement en base
   const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }
   const a = useAuthStore.getState()
 
@@ -61,7 +83,13 @@ export async function activerNotifications(): Promise<boolean> {
     chantier_id: a.chantier?.id ?? null,
   }, { onConflict: 'endpoint' })
 
-  return !error
+  if (error) {
+    toast('error', `Échec enregistrement serveur : ${error.message} — reconnecte-toi et réessaie`)
+    return false
+  }
+
+  toast('success', 'Alertes activées sur cet appareil ✓')
+  return true
 }
 
 /** Désabonne cet appareil */
