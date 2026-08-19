@@ -39,12 +39,18 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Zone de la tâche (pour un message parlant)
+    // Zone + équipe de la tâche (pour un message parlant)
     let zoneName = ''
     if (record.zone_takt_id) {
       const { data: z } = await admin
         .from('zones_takt').select('name').eq('id', record.zone_takt_id).single()
       zoneName = z?.name ?? ''
+    }
+    let equipeName = ''
+    if (record.equipe_id) {
+      const { data: eq } = await admin
+        .from('equipes').select('name').eq('id', record.equipe_id).single()
+      equipeName = eq?.name ?? ''
     }
 
     // Destinataires : encadrement abonné (chefs, CA, admin)
@@ -60,7 +66,7 @@ Deno.serve(async (req) => {
     console.log(`[push-blocage] ${subs.length} abonné(s) trouvé(s)`)
 
     const message = JSON.stringify({
-      title: '🚫 Blocage signalé',
+      title: `🚫 Blocage${equipeName ? ` — ${equipeName}` : ''}`,
       body: `${record.label}${zoneName ? ` — ${zoneName}` : ''}${record.type_blocage ? ` (${record.type_blocage})` : ''}`,
       url: '/production/blocages',
       tag: `blocage-${record.id}`,
