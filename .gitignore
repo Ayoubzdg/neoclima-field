@@ -15,3 +15,5 @@ dist-ssr
 # Artefacts Vite
 vite.config.js.timestamp-*.mjs
 *.tsbuildinfo
+vite.config.js
+vite.config.d.ts
