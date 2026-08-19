@@ -29,7 +29,9 @@ export default function ParamZones() {
   // ── États édition secteur ────────────────────────────────────
   const [editingSecteurId, setEditingSecteurId] = useState<string | null>(null)
   const [editingSecteurName, setEditingSecteurName] = useState('')
+  const [editingSecteurBatiment, setEditingSecteurBatiment] = useState('')
   const [newSecteurName, setNewSecteurName] = useState('')
+  const [newSecteurBatiment, setNewSecteurBatiment] = useState('')
   const [showNewSecteur, setShowNewSecteur] = useState(false)
   const [savingSecteur, setSavingSecteur] = useState(false)
 
@@ -67,7 +69,7 @@ export default function ParamZones() {
     try {
       if (secteur) {
         // Renommage
-        const updated = await upsertSecteur({ ...secteur, name: editingSecteurName })
+        const updated = await upsertSecteur({ ...secteur, name: editingSecteurName, batiment: editingSecteurBatiment.trim() || null })
         setSecteurs(prev => prev.map(s => s.id === updated.id ? updated : s))
         setEditingSecteurId(null)
       } else {
@@ -76,10 +78,12 @@ export default function ParamZones() {
         const created = await upsertSecteur({
           chantier_id: chantier.id,
           name: newSecteurName.trim(),
+          batiment: newSecteurBatiment.trim() || null,
           ordre: secteurs.length + 1
         })
         setSecteurs(prev => [...prev, created])
         setNewSecteurName('')
+        setNewSecteurBatiment('')
         setShowNewSecteur(false)
         setExpandedSecteur(created.id)
       }
@@ -178,6 +182,13 @@ export default function ParamZones() {
             onChange={e => setNewSecteurName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleSaveSecteur(); if (e.key === 'Escape') setShowNewSecteur(false) }}
           />
+          <input
+            className="input-field w-32"
+            placeholder="Bâtiment"
+            title="Bâtiment (agrégation dashboard CA)"
+            value={newSecteurBatiment}
+            onChange={e => setNewSecteurBatiment(e.target.value)}
+          />
           <button onClick={() => handleSaveSecteur()} disabled={savingSecteur || !newSecteurName.trim()}
             className="p-2 bg-nc-blue text-white rounded-xl disabled:opacity-40">
             {savingSecteur ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
@@ -216,6 +227,12 @@ export default function ParamZones() {
                       onChange={e => setEditingSecteurName(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') handleSaveSecteur(secteur); if (e.key === 'Escape') setEditingSecteurId(null) }}
                     />
+                    <input
+                      className="input-field w-28 text-sm"
+                      placeholder="Bâtiment"
+                      value={editingSecteurBatiment}
+                      onChange={e => setEditingSecteurBatiment(e.target.value)}
+                    />
                     <button onClick={() => handleSaveSecteur(secteur)} disabled={savingSecteur}
                       className="p-1.5 bg-nc-blue text-white rounded-lg">
                       {savingSecteur ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
@@ -232,9 +249,12 @@ export default function ParamZones() {
                     >
                       <ChevronRight size={16} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                       <span className="font-semibold text-nc-blue text-sm">{secteur.name}</span>
+                      {secteur.batiment && (
+                        <span className="text-[10px] bg-blue-50 text-nc-blue px-1.5 py-0.5 rounded font-medium">🏢 {secteur.batiment}</span>
+                      )}
                       <span className="text-xs text-gray-400">{secteurZones.length} zone{secteurZones.length !== 1 ? 's' : ''}</span>
                     </button>
-                    <button onClick={() => { setEditingSecteurId(secteur.id); setEditingSecteurName(secteur.name) }}
+                    <button onClick={() => { setEditingSecteurId(secteur.id); setEditingSecteurName(secteur.name); setEditingSecteurBatiment(secteur.batiment ?? '') }}
                       className="p-1.5 text-gray-400 hover:text-nc-blue rounded-lg hover:bg-blue-50">
                       <Pencil size={14} />
                     </button>

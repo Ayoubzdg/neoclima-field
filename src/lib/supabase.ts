@@ -823,6 +823,17 @@ export async function deleteUtilisateur(id: string): Promise<void> {
 
 // ── PLANS VERSIONS ──────────────────────────────────────────
 
+/** Tous les effectifs du chantier (heures consommées cumulées) */
+export async function getEffectifsAll(chantierId: string): Promise<Effectif[]> {
+  const { data, error } = await supabase
+    .from('effectifs')
+    .select('*')
+    .eq('chantier_id', chantierId)
+    .order('date', { ascending: true })
+  if (error) handleError(error, 'getEffectifsAll')
+  return (data ?? []) as Effectif[]
+}
+
 // ── TRAVAUX SUPPLÉMENTAIRES ─────────────────────────────────
 
 export async function getTravauxSupp(chantierId: string): Promise<TravauxSupp[]> {

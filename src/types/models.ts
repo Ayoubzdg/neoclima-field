@@ -87,6 +87,8 @@ export interface Secteur {
   chantier_id: string
   name: string
   description: string | null
+  /** Bâtiment de rattachement (agrégation dashboard CA) */
+  batiment: string | null
   ordre: number
   created_at: string
 }
@@ -138,6 +140,8 @@ export interface TaskType {
   cout_unitaire: number
   /** Lot métier — montage (défaut) ou isolation */
   lot?: 'montage' | 'isolation'
+  /** Système CVC par défaut des tâches créées depuis ce type */
+  systeme?: string | null
 }
 
 // ── Cycle Takt ──────────────────────────────────────────────
@@ -176,6 +180,8 @@ export interface Task {
   entreprise_id: string | null
   /** Lot métier — montage (défaut) ou isolation */
   lot: 'montage' | 'isolation'
+  /** Système CVC (soufflage, extraction, désenfumage…) — agrégation CA */
+  systeme: string | null
   /** Tâche montage dont dépend cette tâche (chaîne montage → isolation) */
   tache_precedente_id: string | null
   /** true tant que le prédécesseur n'est pas validé (maintenu par trigger DB) */
@@ -364,6 +370,8 @@ export interface Effectif {
   date: string
   monteurs_prevus: number
   monteurs_presents: number
+  /** Heures travaillées ce jour (défaut 8) — heures réalisées = présents × heures_jour */
+  heures_jour: number
   note: string | null
   // Relations
   equipe?: Equipe

@@ -45,6 +45,7 @@ import Effectifs from '@/modules/equipes/Effectifs'
 // Module Reporting
 import RapportHebdo from '@/modules/reporting/RapportHebdo'
 import RapportJour from '@/modules/reporting/RapportJour'
+import DashboardCA from '@/modules/reporting/DashboardCA'
 import BonTravail from '@/modules/reporting/BonTravail'
 
 // Module Paramètres
@@ -106,6 +107,7 @@ export const router = createBrowserRouter([
       // ── Reporting ───────────────────────────────────────
       { path: 'reporting', element: guard(['ca', 'admin'], <RapportHebdo />) },
       { path: 'reporting/jour', element: guard(['chef', 'ca', 'admin'], <RapportJour />) },
+      { path: 'reporting/dashboard-ca', element: guard(['ca', 'admin'], <DashboardCA />) },
       { path: 'reporting/bon-travail', element: guard(['chef', 'ca', 'admin'], <BonTravail />) },
 
       // ── Paramètres ──────────────────────────────────────

@@ -12,7 +12,7 @@ export default function Effectifs() {
   const [date, setDate] = useState(todayISO())
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [localEffectifs, setLocalEffectifs] = useState<Record<string, { prevus: number; presents: number }>>({})
+  const [localEffectifs, setLocalEffectifs] = useState<Record<string, { prevus: number; presents: number; heures: number }>>({})
 
   useEffect(() => {
     if (!chantier?.id) return
@@ -28,10 +28,14 @@ export default function Effectifs() {
         : eqAll
       setEquipes(eq)
       setEffectifs(eff)
-      const local: Record<string, { prevus: number; presents: number }> = {}
+      const local: Record<string, { prevus: number; presents: number; heures: number }> = {}
       eq.forEach(e => {
         const ef = eff.find(x => x.equipe_id === e.id)
-        local[e.id] = { prevus: ef?.monteurs_prevus ?? 0, presents: ef?.monteurs_presents ?? 0 }
+        local[e.id] = {
+          prevus: ef?.monteurs_prevus ?? 0,
+          presents: ef?.monteurs_presents ?? 0,
+          heures: ef?.heures_jour ?? 8,
+        }
       })
       setLocalEffectifs(local)
     }).finally(() => setIsLoading(false))
@@ -48,7 +52,8 @@ export default function Effectifs() {
             equipe_id: e.id,
             date,
             monteurs_prevus: localEffectifs[e.id]?.prevus ?? 0,
-            monteurs_presents: localEffectifs[e.id]?.presents ?? 0
+            monteurs_presents: localEffectifs[e.id]?.presents ?? 0,
+            heures_jour: localEffectifs[e.id]?.heures ?? 8
           })
         )
       )
@@ -104,7 +109,19 @@ export default function Effectifs() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Présents</p>
+                  <p className="text-xs text-gray-500 mb-1">
+                    Présents
+                    <span className="text-gray-300"> · h/jour :</span>
+                    <input
+                      type="number" min="0" max="12" step="0.5"
+                      value={localEffectifs[equipe.id]?.heures ?? 8}
+                      onChange={e => setLocalEffectifs(prev => ({
+                        ...prev,
+                        [equipe.id]: { ...prev[equipe.id], heures: parseFloat(e.target.value) || 0 }
+                      }))}
+                      className="w-12 ml-1 border border-gray-200 rounded px-1 py-0.5 text-xs text-center focus:outline-none"
+                    />
+                  </p>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setLocalEffectifs(prev => ({ ...prev, [equipe.id]: { ...prev[equipe.id], presents: Math.max(0, (prev[equipe.id]?.presents ?? 0) - 1) } }))} className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-lg font-bold text-gray-600">-</button>
                     <span className="text-2xl font-black text-nc-blue w-8 text-center">{localEffectifs[equipe.id]?.presents ?? 0}</span>

@@ -64,7 +64,7 @@ function CycleEditModal({
   const [taskForm, setTaskForm] = useState({
     task_type_id: '', label: '', equipe_id: '',
     qte_prevue: '1', unite: 'pce', heures_prevues: '',
-    tache_precedente_id: ''
+    tache_precedente_id: '', systeme: ''
   })
   const [taskSaving, setTaskSaving] = useState(false)
   const [taskError, setTaskError] = useState<string | null>(null)
@@ -146,9 +146,11 @@ function CycleEditModal({
         // Chaîne montage → isolation
         lot: selectedType?.lot ?? 'montage',
         tache_precedente_id: taskForm.tache_precedente_id || null,
+        // Système CVC (agrégation dashboard CA)
+        systeme: taskForm.systeme || null,
       })
       setTasks(prev => [...prev, newTask])
-      setTaskForm({ task_type_id: '', label: '', equipe_id: '', qte_prevue: '1', unite: 'pce', heures_prevues: '', tache_precedente_id: '' })
+      setTaskForm({ task_type_id: '', label: '', equipe_id: '', qte_prevue: '1', unite: 'pce', heures_prevues: '', tache_precedente_id: '', systeme: '' })
       setShowTaskForm(false)
     } finally {
       setTaskSaving(false)
@@ -335,6 +337,7 @@ function CycleEditModal({
                               label: type ? type.name : f.label,
                               unite: type ? type.unite : f.unite,
                               heures_prevues: recalcHeures(f.qte_prevue, type),
+                              systeme: type?.systeme ?? f.systeme,
                             }))
                           }}
                           className="mt-0.5 w-full border border-nc-blue/30 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-nc-blue/30 bg-white font-medium"
@@ -442,6 +445,24 @@ function CycleEditModal({
                         </p>
                       </div>
                     )}
+
+                    {/* ── Système CVC ── */}
+                    <div>
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Système</label>
+                      <select
+                        value={taskForm.systeme}
+                        onChange={e => setTaskForm(f => ({ ...f, systeme: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none bg-white mt-0.5"
+                      >
+                        <option value="">— Sans système —</option>
+                        <option value="soufflage">Soufflage</option>
+                        <option value="extraction">Extraction</option>
+                        <option value="desenfumage">Désenfumage</option>
+                        <option value="reprise">Reprise</option>
+                        <option value="air_neuf">Air neuf</option>
+                        <option value="autre">Autre</option>
+                      </select>
+                    </div>
 
                     {/* ── Équipe ── */}
                     <div>
