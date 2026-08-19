@@ -12,6 +12,7 @@ import { useUiStore } from '@/store/uiStore'
 import { History } from 'lucide-react'
 import type { TaskHistory } from '@/types/models'
 import StatusBadge from '@/components/ui/StatusBadge'
+import SecureImage from '@/components/ui/SecureImage'
 import ProgressBar from '@/components/ui/ProgressBar'
 import BlocageForm from './BlocageForm'
 import { nextStatus, actionLabel, canValidate } from '@/utils/statusMachine'
@@ -216,14 +217,12 @@ export default function TacheDetail() {
               </p>
               <div className="grid grid-cols-3 gap-2">
                 {photos.map(p => (
-                  <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer">
-                    <img
-                      src={p.url}
-                      alt={p.legende ?? 'Photo'}
-                      className="w-full aspect-square object-cover rounded-lg border border-gray-100"
-                      loading="lazy"
-                    />
-                  </a>
+                  <SecureImage
+                    key={p.id}
+                    src={p.url}
+                    alt={p.legende ?? 'Photo'}
+                    className="w-full aspect-square object-cover rounded-lg border border-gray-100"
+                  />
                 ))}
               </div>
             </div>

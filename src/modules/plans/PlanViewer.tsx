@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Upload, ZoomIn, ZoomOut, List, AlertTriangle, Loader2, History } from 'lucide-react'
 import { getZoneByQrCode, getTasksByZone, uploadPlan, getPlanVersions, supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { getSecureUrl, openSecure } from '@/lib/secureUrl'
 import type { ZoneTakt, Task, PlanVersion } from '@/types/models'
 import StatusBadge from '@/components/ui/StatusBadge'
 
@@ -65,7 +66,10 @@ export default function PlanViewer() {
       try {
         const pdfjsLib = await import('pdfjs-dist')
         pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
-        const response = await fetch(zone.plan_url!)
+        // Bucket privé : URL signée générée à la volée (fallback URL
+        // d'origine tant que le bucket est encore public)
+        const secureUrl = await getSecureUrl(zone.plan_url!)
+        const response = await fetch(secureUrl ?? zone.plan_url!)
         if (!response.ok) throw new Error(`HTTP ${response.status} — impossible de charger le plan`)
         const arrayBuffer = await response.arrayBuffer()
         pdfDocRef.current = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
@@ -254,7 +258,7 @@ export default function PlanViewer() {
                 {v.cree_par && <span className="text-gray-400">par {v.cree_par}</span>}
                 {v.version === zone.plan_version
                   ? <span className="text-green-600 font-medium">· en vigueur</span>
-                  : <a href={v.url} target="_blank" rel="noopener noreferrer" className="text-nc-blue underline">voir</a>}
+                  : <button onClick={() => openSecure(v.url)} className="text-nc-blue underline">voir</button>}
               </div>
             ))}
           </div>

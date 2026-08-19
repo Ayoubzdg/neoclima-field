@@ -4,6 +4,7 @@ import { ArrowLeft, Camera, CheckCircle, AlertTriangle, Loader2 } from 'lucide-r
 import { supabase, preparePhoto, uploadPhotoBlob, savePhoto } from '@/lib/supabase'
 import { addPhotoOffline } from '@/lib/offline/db'
 import { useUiStore } from '@/store/uiStore'
+import SecureImage from '@/components/ui/SecureImage'
 import { useAuthStore } from '@/store/authStore'
 import { useQualiteStore } from '@/store/qualiteStore'
 import { formatDateFR } from '@/utils/dates'
@@ -149,14 +150,12 @@ export default function NcDetail() {
             </p>
             <div className="grid grid-cols-3 gap-2">
               {nc.photos.map((p: Photo) => (
-                <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={p.url}
-                    alt={p.legende ?? ''}
-                    className="w-full aspect-square object-cover rounded-xl border border-gray-100"
-                    loading="lazy"
-                  />
-                </a>
+                <SecureImage
+                  key={p.id}
+                  src={p.url}
+                  alt={p.legende ?? ''}
+                  className="w-full aspect-square object-cover rounded-xl border border-gray-100"
+                />
               ))}
             </div>
           </div>

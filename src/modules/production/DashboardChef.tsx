@@ -2,8 +2,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, Users, TrendingUp, Calendar,
-  RefreshCw, CheckCircle, Clock, Play, ChevronDown, ChevronUp, AlertCircle
+  RefreshCw, CheckCircle, Clock, Play, ChevronDown, ChevronUp, AlertCircle,
+  Bell, BellRing
 } from 'lucide-react'
+import { pushDisponible, pushActif, activerNotifications } from '@/lib/push'
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
 import { todayISO, formatDateFR } from '@/utils/dates'
@@ -29,6 +31,7 @@ export default function DashboardChef() {
   const { allTasks: allTasksRaw, equipes: equipesRaw, effectifs, isLoading, loadAllTasks, loadEquipes, loadEffectifs } = useProductionStore()
   const today = todayISO()
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [notifOk, setNotifOk] = useState(pushActif())
 
   // ── Cloisonnement sous-traitant ─────────────────────────────
   // Un chef d'équipe ST ne voit que les équipes et tâches de
@@ -99,6 +102,20 @@ export default function DashboardChef() {
         </div>
 
         <div className="flex flex-col items-end gap-1.5">
+          {/* Notifications push : blocage signalé → alerte immédiate */}
+          {pushDisponible() && (
+            <button
+              onClick={async () => { if (!notifOk) setNotifOk(await activerNotifications()) }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs transition-all touch-manipulation
+                ${notifOk
+                  ? 'border-green-200 bg-green-50 text-green-600'
+                  : 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 active:scale-95'}`}
+              title={notifOk ? 'Notifications actives sur cet appareil' : 'Être alerté immédiatement des blocages'}
+            >
+              {notifOk ? <BellRing size={13} /> : <Bell size={13} />}
+              {notifOk ? 'Alertes actives' : 'Activer les alertes'}
+            </button>
+          )}
           {/* Bouton rafraîchir */}
           <button
             onClick={refresh}

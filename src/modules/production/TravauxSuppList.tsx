@@ -5,6 +5,7 @@ import {
 import { useAuthStore } from '@/store/authStore'
 import { getTravauxSupp, updateTravauxSupp } from '@/lib/supabase'
 import { formatDateShort } from '@/utils/dates'
+import SecureImage from '@/components/ui/SecureImage'
 import type { TravauxSupp, TravauxSuppStatut } from '@/types/models'
 
 const STATUT_META: Record<TravauxSuppStatut, { label: string; cls: string }> = {
@@ -93,9 +94,9 @@ export default function TravauxSuppList() {
               <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="flex gap-3 p-3">
                   {t.photo_url && (
-                    <a href={t.photo_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
-                      <img src={t.photo_url} alt="Constat" className="w-20 h-20 object-cover rounded-xl border border-gray-100" />
-                    </a>
+                    <div className="flex-shrink-0 w-20">
+                      <SecureImage src={t.photo_url} alt="Constat" className="w-20 h-20 object-cover rounded-xl border border-gray-100" />
+                    </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap mb-1">
