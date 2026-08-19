@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Users, Plus, Edit2, Trash2, Save, X, Eye, EyeOff, Check } from 'lucide-react'
+import { Users, Plus, Edit2, Trash2, X, Check } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { getEquipes, getUtilisateurs, upsertEquipe, upsertUtilisateur, deleteUtilisateur, getEntreprises } from '@/lib/supabase'
 import type { Equipe, Utilisateur, UserRole, Entreprise } from '@/types/models'
@@ -147,7 +147,6 @@ export default function ParamEquipes() {
   const [equipes, setEquipes] = useState<Equipe[]>([])
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([])
   const [entreprises, setEntreprises] = useState<Entreprise[]>([])
-  const [showPins, setShowPins] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   // Edit states
@@ -207,13 +206,6 @@ export default function ParamEquipes() {
           <Users size={20} className="text-nc-red" />
           <h2 className="text-lg font-bold text-nc-blue">Équipes & Utilisateurs</h2>
         </div>
-        <button
-          onClick={() => setShowPins(p => !p)}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-nc-blue bg-gray-100 px-3 py-1.5 rounded-lg"
-        >
-          {showPins ? <EyeOff size={14} /> : <Eye size={14} />}
-          {showPins ? 'Masquer' : 'Afficher'} PINs
-        </button>
       </div>
 
       {isLoading ? (
@@ -248,11 +240,6 @@ export default function ParamEquipes() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {showPins && equipe.code_pin && (
-                        <span className="font-mono text-xs bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded border border-yellow-200">
-                          PIN: {equipe.code_pin}
-                        </span>
-                      )}
                       <button
                         onClick={() => { setEditingEquipeId(equipe.id); setAddingEquipe(false) }}
                         className="p-1.5 rounded-lg hover:bg-gray-100"
@@ -291,11 +278,6 @@ export default function ParamEquipes() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {showPins && (
-                            <span className="font-mono text-xs bg-gray-50 text-gray-500 px-2 py-0.5 rounded border border-gray-100">
-                              {user.code_pin ?? '—'}
-                            </span>
-                          )}
                           <button
                             onClick={() => { setEditingUserId(user.id); setAddingMemberToEquipe(null) }}
                             className="p-1.5 rounded-lg hover:bg-gray-100"

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { FileText, Download, Loader2, ChevronLeft, ChevronRight, Presentation } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { getTasksByChantier, getEffectifs, getNonConformites } from '@/lib/supabase'
-import { calculerPPC, calculerAvancement, getPpcColor } from '@/utils/ppc'
+import { calculerPPC, calculerAvancementMixte, getPpcColor } from '@/utils/ppc'
 import { currentMondayISO, getSemaineLabel, addWeeks, formatDateISO } from '@/utils/dates'
 import ProgressBar from '@/components/ui/ProgressBar'
 import type { Task, Effectif, NonConformite } from '@/types/models'
@@ -41,7 +41,7 @@ export default function RapportHebdo() {
       getNonConformites(chantier.id)
     ]).then(([tasks, effectifs, ncs]) => {
       const ppc = calculerPPC(tasks)
-      const avancement = calculerAvancement(tasks)
+      const avancement = calculerAvancementMixte(tasks)
       const engagees = tasks.filter(t => t.engage)
       const realisees = engagees.filter(t => t.status === 'done')
       const blocages = tasks.filter(t => t.status === 'blocked')
@@ -53,7 +53,8 @@ export default function RapportHebdo() {
         tasksEngagees: engagees.length,
         tasksRealisees: realisees.length,
         blocages,
-        totalHeures: totalPresents * 8,
+        // Heures réelles déclarées (présents × h/jour) — plus le forfait ×8
+        totalHeures: Math.round(effectifs.reduce((s, e) => s + e.monteurs_presents * (e.heures_jour ?? 8), 0)),
         totalPresents,
         totalPrevus
       })
@@ -81,8 +82,13 @@ export default function RapportHebdo() {
         day: '2-digit', month: 'long', year: 'numeric'
       })
 
-      // ── Avancement global calculé sur toutes les tâches ──
-      const avanGlobal = calculerAvancement(allTasks)
+      // ── Avancement global VALIDÉ, pondéré par les heures prévues ──
+      // (cohérent avec le Dashboard CA — base de facturation, pas le déclaré)
+      const poidsT = (t: Task) => t.heures_prevues > 0 ? t.heures_prevues : 1
+      const totalPoids = allTasks.reduce((s, t) => s + poidsT(t), 0)
+      const avanGlobal = totalPoids > 0
+        ? Math.round(allTasks.reduce((s, t) => s + poidsT(t) * (t.status === 'done' ? 1 : 0), 0) / totalPoids * 100)
+        : 0
 
       // ── Avancement par zone — depuis toutes les tâches, regroupées par zone ──
       const zoneMap = new Map<string, { done: number; total: number; batiment: string; niveau: string; hasBlocked: boolean }>()
@@ -120,11 +126,13 @@ export default function RapportHebdo() {
       const equipes = Array.from(equipesMap.values())
 
       // ── Vigilances = tâches bloquées de la semaine ──
+      // Faits uniquement — aucune phrase inventée : le CA complète
+      // ou corrige avant envoi au client
       const vigilances = stats.blocages.map(t => ({
         zone: t.zone_takt?.name ?? '—',
         sujet: t.label,
-        action: (t as any).comment ?? 'Coordination en cours. Solution identifiée.',
-        impact: 'Suivi en cours — impact planning maîtrisé',
+        action: (t as any).comment ?? 'Action à définir',
+        impact: t.type_blocage ? `Cause : ${t.type_blocage}` : 'À qualifier',
       }))
 
       // ── Semaines restantes depuis date_fin_prev du chantier ──
@@ -144,8 +152,8 @@ export default function RapportHebdo() {
         date: `S+${i + 1}`,
         titre: `${z.batiment} — ${z.niveau}`,
         detail: z.avancement > 0
-          ? `Finalisation en cours (${z.avancement}%) — objectif réception prochaine semaine`
-          : 'Démarrage planifié — équipes mobilisées et approvisionnements confirmés',
+          ? `Avancement ${z.avancement}% — à finaliser`
+          : 'Non démarré — planifié',
       }))
 
       const nbVigilances = vigilances.length
@@ -166,11 +174,11 @@ export default function RapportHebdo() {
           statut_global,
           avancement_global: Math.round(avanGlobal),
           semaines_restantes: semainesRestantes,
-          phrase: `Le chantier progresse avec un PPC de ${ppcSemaine}. ${
+          phrase: `Avancement validé : ${Math.round(avanGlobal)} %. PPC de la semaine : ${ppcSemaine}. ${
             nbVigilances > 0
-              ? `${nbVigilances} point${nbVigilances > 1 ? 's' : ''} de coordination actif${nbVigilances > 1 ? 's' : ''}, tous maîtrisés.`
-              : 'Aucun point de vigilance.'
-          } Le planning global reste tenu.`,
+              ? `${nbVigilances} blocage${nbVigilances > 1 ? 's' : ''} actif${nbVigilances > 1 ? 's' : ''} (détail ci-dessous).`
+              : 'Aucun blocage actif.'
+          }`,
         },
         zones,
         equipes,

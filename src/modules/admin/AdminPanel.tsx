@@ -1158,7 +1158,6 @@ export default function AdminPanel() {
   const [users, setUsers] = useState<Utilisateur[]>([])
   const [equipes, setEquipes] = useState<Equipe[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [showPins, setShowPins] = useState(false)
   const [filterRole, setFilterRole] = useState<UserRole | 'tous'>('tous')
   const [filterActif, setFilterActif] = useState<'tous' | 'actifs' | 'inactifs'>('actifs')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -1274,13 +1273,6 @@ export default function AdminPanel() {
               title="Actualiser"
             >
               <RefreshCw size={15} />
-            </button>
-            <button
-              onClick={() => setShowPins(p => !p)}
-              className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
-            >
-              {showPins ? <EyeOff size={13} /> : <Eye size={13} />}
-              PINs
             </button>
           </div>
         )}
@@ -1412,7 +1404,7 @@ export default function AdminPanel() {
                     <UserRow
                       user={user}
                       equipes={equipes}
-                      showPin={showPins}
+                      showPin={false}
                       onEdit={() => { setEditingId(user.id); setIsAdding(false) }}
                       onToggleActif={() => handleToggleActif(user)}
                     />

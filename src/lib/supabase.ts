@@ -340,26 +340,13 @@ export async function getTasksByChantier(chantierId: string, filters?: {
   equipeId?: string
   status?: string
 }): Promise<Task[]> {
-  // Étape 1 : secteurs du chantier
-  const { data: secteurs } = await supabase
-    .from('secteurs')
-    .select('id')
-    .eq('chantier_id', chantierId)
-  const secteurIds = (secteurs ?? []).map((s: { id: string }) => s.id)
-  if (secteurIds.length === 0) return []
-
-  // Étape 2 : zones des secteurs
-  const { data: zones } = await supabase
-    .from('zones_takt')
-    .select('id')
-    .in('secteur_id', secteurIds)
-  const zoneIds = (zones ?? []).map((z: { id: string }) => z.id)
-  if (zoneIds.length === 0) return []
-
+  // UNE seule requête avec jointure !inner filtrée sur le chantier.
+  // (Avant : 3 requêtes en cascade secteurs → zones → tasks,
+  //  exécutées toutes les 60 s par chaque client connecté.)
   let query = supabase
     .from('tasks')
-    .select('*, equipe:equipes(*), zone_takt:zones_takt(*, secteur:secteurs(*))')
-    .in('zone_takt_id', zoneIds)
+    .select('*, equipe:equipes(*), zone_takt:zones_takt!inner(*, secteur:secteurs!inner(*))')
+    .eq('zone_takt.secteur.chantier_id', chantierId)
 
   if (filters?.semaine) query = query.eq('date_planifiee', filters.semaine)
   if (filters?.equipeId) query = query.eq('equipe_id', filters.equipeId)

@@ -181,29 +181,6 @@ export default function TacheDetail() {
             <ProgressBar value={pct} color="auto" className="mt-3" showLabel />
           </div>
 
-          {/* Phases */}
-          {task.phases && task.phases.length > 0 && (
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-              <p className="text-sm font-semibold text-gray-700 mb-3">Phases</p>
-              <div className="space-y-2">
-                {task.phases.map((phase, i) => (
-                  <div key={phase.id} className="flex items-center gap-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
-                      ${phase.status === 'done' ? 'bg-green-500 text-white'
-                        : phase.status === 'en_cours' ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-500'}`}>
-                      {i + 1}
-                    </div>
-                    <span className={`text-sm ${phase.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                      {phase.name}
-                    </span>
-                    {phase.status === 'done' && <CheckCircle size={14} className="text-green-500 ml-auto" />}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Contraintes */}
           {task.contraintes && task.contraintes.filter(c => c.statut !== 'levee').length > 0 && (
             <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
