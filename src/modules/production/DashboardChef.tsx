@@ -8,22 +8,18 @@ import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
 import { todayISO, formatDateFR } from '@/utils/dates'
 import { calculerAvancementMixte } from '@/utils/ppc'
+import { STATUS_LABELS } from '@/utils/statusMachine'
 import ProgressBar from '@/components/ui/ProgressBar'
 import AlertesBanner from '@/components/ui/AlertesBanner'
 import type { Task, Equipe } from '@/types/models'
 
 // ── Icône statut tâche ───────────────────────────────────────
 function StatusIcon({ status }: { status: string }) {
-  if (status === 'done')    return <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
-  if (status === 'blocked') return <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
-  if (status === 'en_cours' || ['nappe_h','nappe_b','terminaux','raccordement'].includes(status))
-                            return <Play size={14} className="text-blue-500 flex-shrink-0" />
-  return                           <Clock size={14} className="text-gray-300 flex-shrink-0" />
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  todo: 'À faire', en_cours: 'En cours', done: 'Terminé', blocked: 'Bloqué',
-  nappe_h: 'Nappe H', nappe_b: 'Nappe B', terminaux: 'Terminaux', raccordement: 'Raccordement',
+  if (status === 'done')        return <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+  if (status === 'a_controler') return <CheckCircle size={14} className="text-amber-500 flex-shrink-0" />
+  if (status === 'blocked')     return <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
+  if (status === 'en_cours')    return <Play size={14} className="text-blue-500 flex-shrink-0" />
+  return                               <Clock size={14} className="text-gray-300 flex-shrink-0" />
 }
 
 // ── Dashboard principal ──────────────────────────────────────
@@ -52,12 +48,14 @@ export default function DashboardChef() {
       const avancement  = calculerAvancementMixte(tasks)
       const blocked     = tasks.filter(t => t.status === 'blocked').length
       const done        = tasks.filter(t => t.status === 'done').length
-      const enCours     = tasks.filter(t => ['en_cours','nappe_h','nappe_b','terminaux','raccordement'].includes(t.status)).length
-      return { equipe, tasks, effectif, avancement, blocked, done, enCours }
+      const aControler  = tasks.filter(t => t.status === 'a_controler').length
+      const enCours     = tasks.filter(t => t.status === 'en_cours').length
+      return { equipe, tasks, effectif, avancement, blocked, done, aControler, enCours }
     })
     .filter(e => e.tasks.length > 0)          // ← masquer les équipes sans tâches
 
-  const totalBlocages  = allTasks.filter(t => t.status === 'blocked').length
+  const totalBlocages   = allTasks.filter(t => t.status === 'blocked').length
+  const totalAControler = allTasks.filter(t => t.status === 'a_controler').length
   const totalPresents  = effectifs.reduce((s, e) => s + e.monteurs_presents, 0)
   const totalPrevus    = effectifs.reduce((s, e) => s + e.monteurs_prevus, 0)
   const avanTotal      = tasksByEquipe.length
@@ -122,13 +120,14 @@ export default function DashboardChef() {
         </div>
       ) : (
         <div className="space-y-3 mt-4">
-          {tasksByEquipe.map(({ equipe, tasks, effectif, avancement, blocked, done, enCours }) => (
+          {tasksByEquipe.map(({ equipe, tasks, effectif, avancement, blocked, done, aControler, enCours }) => (
             <EquipeCard
               key={equipe.id}
               equipe={equipe}
               tasks={tasks}
               avancement={avancement}
               done={done}
+              aControler={aControler}
               enCours={enCours}
               blocked={blocked}
               presents={effectif?.monteurs_presents ?? 0}
@@ -141,6 +140,14 @@ export default function DashboardChef() {
 
       {/* ── Actions rapides ── */}
       <div className="flex gap-2 mt-5 flex-wrap">
+        <button
+          onClick={() => navigate('/production/controle')}
+          className={`flex-1 min-w-[110px] text-sm flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold transition-colors
+            ${totalAControler > 0 ? 'bg-amber-500 text-white' : 'btn-secondary'}`}
+        >
+          <CheckCircle size={15} />
+          Contrôle{totalAControler > 0 ? ` (${totalAControler})` : ''}
+        </button>
         <button
           onClick={() => navigate('/production/blocages')}
           className={`flex-1 min-w-[110px] text-sm flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold transition-colors
@@ -165,12 +172,13 @@ export default function DashboardChef() {
 
 // ── Carte équipe avec liste de tâches dépliable ──────────────
 function EquipeCard({
-  equipe, tasks, avancement, done, enCours, blocked, presents, prevus, onTaskClick
+  equipe, tasks, avancement, done, aControler, enCours, blocked, presents, prevus, onTaskClick
 }: {
   equipe: Equipe
   tasks: Task[]
   avancement: number
   done: number
+  aControler: number
   enCours: number
   blocked: number
   presents: number
@@ -214,9 +222,10 @@ function EquipeCard({
         <ProgressBar value={avancement} color="auto" height="h-1.5" />
         <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
           <span>{tasks.length} tâche{tasks.length > 1 ? 's' : ''}</span>
-          {enCours > 0 && <span className="text-blue-500">{enCours} en cours</span>}
-          {done > 0    && <span className="text-green-600">{done} ✓</span>}
-          {blocked > 0 && <span className="text-red-500 font-medium">{blocked} ✗</span>}
+          {enCours > 0    && <span className="text-blue-500">{enCours} en cours</span>}
+          {aControler > 0 && <span className="text-amber-600 font-medium">{aControler} à contrôler</span>}
+          {done > 0       && <span className="text-green-600">{done} ✓</span>}
+          {blocked > 0    && <span className="text-red-500 font-medium">{blocked} ✗</span>}
         </div>
       </button>
 
@@ -244,8 +253,8 @@ function EquipeCard({
                       {task.label}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-gray-400">
-                        {STATUS_LABEL[task.status] ?? task.status}
+                      <span className={`text-[10px] ${task.status === 'a_controler' ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
+                        {STATUS_LABELS[task.status] ?? task.status}
                       </span>
                       {task.zone_takt?.name && (
                         <span className="text-[10px] bg-gray-100 text-gray-400 px-1 rounded">

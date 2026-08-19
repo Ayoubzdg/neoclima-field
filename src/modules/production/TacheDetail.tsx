@@ -10,29 +10,8 @@ import { getTaskById, uploadPhoto, savePhoto, getPhotosByTask } from '@/lib/supa
 import StatusBadge from '@/components/ui/StatusBadge'
 import ProgressBar from '@/components/ui/ProgressBar'
 import BlocageForm from './BlocageForm'
+import { nextStatus, actionLabel, canValidate } from '@/utils/statusMachine'
 import type { Task, TaskStatus, Photo } from '@/types/models'
-
-const NEXT_STATUS: Record<string, TaskStatus> = {
-  todo: 'en_cours',
-  en_cours: 'done',
-  nappe_h: 'nappe_b',
-  nappe_b: 'terminaux',
-  terminaux: 'raccordement',
-  raccordement: 'done',
-  done: 'done',
-  blocked: 'en_cours'
-}
-
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  todo: 'Démarrer',
-  en_cours: 'Terminer',
-  nappe_h: 'Nappe basse →',
-  nappe_b: 'Terminaux →',
-  terminaux: 'Raccordement →',
-  raccordement: 'Terminer',
-  done: 'Terminé ✓',
-  blocked: 'Reprendre'
-}
 
 export default function TacheDetail() {
   const { id } = useParams<{ id: string }>()
@@ -62,21 +41,31 @@ export default function TacheDetail() {
       .finally(() => setIsLoading(false))
   }, [id])
 
-  const handleStatusUpdate = async (newStatus: TaskStatus) => {
+  const handleStatusUpdate = async (newStatus: TaskStatus, extra?: Partial<Task>) => {
     if (!task || isUpdating) return
     setIsUpdating(true)
-    const updates: Partial<Task> = { qte_realisee: parseFloat(qteRealisee) || task.qte_realisee }
+    const updates: Partial<Task> = {
+      qte_realisee: parseFloat(qteRealisee) || task.qte_realisee,
+      ...extra,
+    }
     if (newStatus === 'en_cours' && !task.date_debut_reel) {
       updates.date_debut_reel = new Date().toISOString()
     }
-    if (newStatus === 'done') {
+    if (newStatus === 'a_controler' && task.status !== 'done') {
+      // Fin des travaux déclarée — on garde la quantité réellement
+      // saisie (avant : écrasée par qte_prevue, on perdait l'info)
       updates.date_fin_reel = new Date().toISOString()
-      updates.qte_realisee = task.qte_prevue
-      setQteRealisee(String(task.qte_prevue))
     }
     await updateStatus(task.id, newStatus, updates, role ?? 'monteur')
     setTask(prev => prev ? { ...prev, status: newStatus, ...updates } : prev)
     setIsUpdating(false)
+  }
+
+  // Refus de contrôle par le chef : motif obligatoire → retour en cours
+  const handleRefus = async () => {
+    const motif = window.prompt('Motif du refus (obligatoire) :')
+    if (!motif?.trim()) return
+    await handleStatusUpdate('en_cours', { comment: `⚠ Contrôle refusé : ${motif.trim()}` })
   }
 
   const handlePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,9 +102,11 @@ export default function TacheDetail() {
     <div className="p-4 text-center text-gray-400">Tâche introuvable</div>
   )
 
-  const nextStatus = NEXT_STATUS[task.status] ?? 'done'
+  const next = nextStatus(task.status, role)
   const pct = task.qte_prevue > 0 ? Math.round((parseFloat(qteRealisee) / task.qte_prevue) * 100) : 0
-  const isDone = task.status === 'done'
+  const isValide = task.status === 'done'
+  const isAControler = task.status === 'a_controler'
+  const isChef = canValidate(role)
 
   return (
     <>
@@ -152,7 +143,7 @@ export default function TacheDetail() {
                 type="number"
                 value={qteRealisee}
                 onChange={e => setQteRealisee(e.target.value)}
-                disabled={isDone}
+                disabled={isValide}
                 className="input-field text-2xl font-bold text-nc-blue w-28 text-center"
                 min={0}
                 max={task.qte_prevue * 2}
@@ -237,22 +228,25 @@ export default function TacheDetail() {
           )}
         </div>
 
-        {/* Actions bas de page */}
-        {!isDone && (
+        {/* Actions bas de page — selon l'état du workflow */}
+        {!isValide && !isAControler && (
+          /* ── Tâche active (à faire / en cours / bloquée) ── */
           <div className="p-4 bg-white border-t border-gray-100 space-y-2 safe-bottom">
-            <button
-              onClick={() => handleStatusUpdate(nextStatus)}
-              disabled={isUpdating}
-              className="w-full btn-primary flex items-center justify-center gap-2 h-14 text-lg"
-            >
-              {isUpdating ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : task.status === 'todo' ? (
-                <><Clock size={20} />{STATUS_LABELS[task.status]}</>
-              ) : (
-                <><CheckCircle size={20} />{STATUS_LABELS[task.status]}</>
-              )}
-            </button>
+            {next && (
+              <button
+                onClick={() => handleStatusUpdate(next)}
+                disabled={isUpdating}
+                className="w-full btn-primary flex items-center justify-center gap-2 h-14 text-lg"
+              >
+                {isUpdating ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : task.status === 'todo' ? (
+                  <><Clock size={20} />{actionLabel(task.status, role)}</>
+                ) : (
+                  <><CheckCircle size={20} />{actionLabel(task.status, role)}</>
+                )}
+              </button>
+            )}
 
             <button
               onClick={() => setShowBlocage(true)}
@@ -282,21 +276,89 @@ export default function TacheDetail() {
           </div>
         )}
 
-        {isDone && (
+        {isAControler && (
+          /* ── En attente de contrôle ── */
+          <div className="p-4 bg-white border-t border-gray-100 space-y-2 safe-bottom">
+            {isChef ? (
+              <>
+                <button
+                  onClick={() => handleStatusUpdate('done')}
+                  disabled={isUpdating}
+                  className="w-full h-14 rounded-xl bg-green-600 text-white font-semibold text-lg
+                             flex items-center justify-center gap-2 active:scale-95 transition-all
+                             hover:bg-green-700 disabled:opacity-50"
+                >
+                  {isUpdating ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle size={20} />}
+                  Valider les travaux
+                </button>
+                <button
+                  onClick={handleRefus}
+                  disabled={isUpdating}
+                  className="w-full py-3 px-6 rounded-xl border-2 border-red-200 text-red-600
+                             font-semibold flex items-center justify-center gap-2
+                             active:scale-95 transition-all hover:bg-red-50"
+                >
+                  <AlertTriangle size={18} />
+                  Refuser — renvoyer en cours
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-center gap-2 py-2 text-amber-600 font-semibold">
+                  <Clock size={18} />
+                  En attente de contrôle du chef
+                </div>
+                <button
+                  onClick={() => handleStatusUpdate('en_cours')}
+                  disabled={isUpdating}
+                  className="w-full py-3 px-6 rounded-xl border border-gray-200 text-gray-500
+                             font-medium flex items-center justify-center gap-2
+                             active:scale-95 transition-all hover:bg-gray-50"
+                >
+                  Annuler — remettre en cours
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => photoInputRef.current?.click()}
+              disabled={isUploadingPhoto}
+              className="w-full py-2.5 px-6 rounded-xl border border-gray-200 text-gray-500 text-sm
+                         font-medium flex items-center justify-center gap-2
+                         active:scale-95 transition-all hover:bg-gray-50 disabled:opacity-50"
+            >
+              {isUploadingPhoto ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+              Ajouter une photo
+            </button>
+          </div>
+        )}
+
+        {isValide && (
+          /* ── Validée ── */
           <div className="p-4 bg-white border-t border-gray-100 safe-bottom">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-green-600 font-semibold">
                 <CheckCircle size={20} />
-                Tâche terminée
+                Travaux validés
               </div>
-              <button
-                onClick={() => photoInputRef.current?.click()}
-                disabled={isUploadingPhoto}
-                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-nc-blue"
-              >
-                {isUploadingPhoto ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-                Photo
-              </button>
+              <div className="flex items-center gap-3">
+                {isChef && (
+                  <button
+                    onClick={() => handleStatusUpdate('a_controler')}
+                    disabled={isUpdating}
+                    className="text-sm text-gray-400 hover:text-nc-blue underline"
+                  >
+                    Dévalider
+                  </button>
+                )}
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={isUploadingPhoto}
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-nc-blue"
+                >
+                  {isUploadingPhoto ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                  Photo
+                </button>
+              </div>
             </div>
           </div>
         )}

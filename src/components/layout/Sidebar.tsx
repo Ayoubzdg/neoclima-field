@@ -17,6 +17,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/production',            icon: <ClipboardList size={18} />, label: 'Mes tâches',      roles: ['monteur', 'chef', 'ca', 'admin'] },
       { to: '/production/chef',       icon: <HardHat size={18} />,       label: 'Dashboard chef',  roles: ['chef', 'ca', 'admin'] },
+      { to: '/production/controle',   icon: <ShieldCheck size={18} />,   label: 'Contrôle travaux', roles: ['chef', 'ca', 'admin'] },
       { to: '/production/takt',       icon: <BarChart2 size={18} />,     label: 'Tableau de flux', roles: ['chef', 'ca', 'admin'] },
       { to: '/production/blocages',   icon: <Shield size={18} />,        label: 'Blocages urgents',roles: ['chef', 'ca', 'admin'] },
       { to: '/production/scan',       icon: <QrCode size={18} />,        label: 'Scanner QR',      roles: ['monteur', 'chef', 'ca', 'admin'] },

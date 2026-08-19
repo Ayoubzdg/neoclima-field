@@ -62,10 +62,7 @@
   .badge-en_cours { @apply bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded-full; }
   .badge-done     { @apply bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full; }
   .badge-blocked  { @apply bg-red-100 text-red-700 text-xs font-medium px-2 py-1 rounded-full; }
-  .badge-nappe_h  { @apply bg-purple-100 text-purple-700 text-xs font-medium px-2 py-1 rounded-full; }
-  .badge-nappe_b  { @apply bg-indigo-100 text-indigo-700 text-xs font-medium px-2 py-1 rounded-full; }
-  .badge-terminaux { @apply bg-amber-100 text-amber-700 text-xs font-medium px-2 py-1 rounded-full; }
-  .badge-raccordement { @apply bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-1 rounded-full; }
+  .badge-a_controler { @apply bg-amber-100 text-amber-700 text-xs font-medium px-2 py-1 rounded-full; }
 
   /* ── Input field ─────────────────────────────────────── */
   .input-field {

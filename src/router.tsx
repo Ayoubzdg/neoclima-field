@@ -8,6 +8,7 @@ import MesTaches from '@/modules/production/MesTaches'
 import TacheDetail from '@/modules/production/TacheDetail'
 import QRScanner from '@/modules/production/QRScanner'
 import DashboardChef from '@/modules/production/DashboardChef'
+import ControleTaches from '@/modules/production/ControleTaches'
 import TableauFluxTakt from '@/modules/production/TableauFluxTakt'
 import BlocagesUrgents from '@/modules/production/BlocagesUrgents'
 import ZoneTasksView from '@/modules/production/ZoneTasksView'
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
       { path: 'production/tache/:id', element: <TacheDetail /> },
       { path: 'production/scan', element: <QRScanner /> },
       { path: 'production/chef', element: <DashboardChef /> },
+      { path: 'production/controle', element: <ControleTaches /> },
       { path: 'production/takt', element: <TableauFluxTakt /> },
       { path: 'production/blocages', element: <BlocagesUrgents /> },
 

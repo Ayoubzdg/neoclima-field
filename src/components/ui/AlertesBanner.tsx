@@ -48,7 +48,8 @@ export function computeAlertes(allTasks: Task[], equipes: Equipe[]): Alerte[] {
   const retard = allTasks.filter(t => {
     if (!t.date_planifiee) return false
     const taskDate = new Date(t.date_planifiee)
-    return taskDate < mondayDate && t.status !== 'done'
+    // Une tâche déclarée terminée (à contrôler) n'est plus "en retard terrain"
+    return taskDate < mondayDate && t.status !== 'done' && t.status !== 'a_controler'
   })
   if (retard.length > 0) {
     const equipesRetard = [...new Set(

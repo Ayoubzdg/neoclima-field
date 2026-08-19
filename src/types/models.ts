@@ -5,7 +5,14 @@
 // ── Enums ───────────────────────────────────────────────────
 
 export type ChantierStatut = 'actif' | 'termine' | 'archive'
-export type TaskStatus = 'todo' | 'en_cours' | 'nappe_h' | 'nappe_b' | 'terminaux' | 'raccordement' | 'done' | 'blocked'
+/**
+ * Workflow de validation :
+ *   todo → en_cours → a_controler → done (= VALIDÉ par le chef)
+ *              ↕ blocked
+ * Le monteur pose a_controler ("Terminé"), seul chef/ca/admin
+ * valide (done). Seul done compte dans l'avancement et le PPC.
+ */
+export type TaskStatus = 'todo' | 'en_cours' | 'a_controler' | 'done' | 'blocked'
 export type PhaseStatus = 'todo' | 'en_cours' | 'done'
 export type CycleStatut = 'planifie' | 'en_cours' | 'complete' | 'partiel'
 export type ContrainteType = 'materiau' | 'acces' | 'gros_oeuvre' | 'autre_corps' | 'equipement' | 'autre'

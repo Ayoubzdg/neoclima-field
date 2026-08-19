@@ -8,7 +8,8 @@ import { getZoneByQrCode, getTasksByZone, supabase } from '@/lib/supabase'
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
 import { currentMondayISO } from '@/utils/dates'
-import type { ZoneTakt, Task, TaskStatus } from '@/types/models'
+import { nextStatus } from '@/utils/statusMachine'
+import type { ZoneTakt, Task } from '@/types/models'
 import StatusBadge from '@/components/ui/StatusBadge'
 import ProgressBar from '@/components/ui/ProgressBar'
 
@@ -53,25 +54,17 @@ export default function ZoneTasksView() {
   }, [qrCode, id, filtreEquipe, equipe?.id, semaineCourante])
 
   const handleStatusCycle = async (task: Task) => {
-    const next: Record<TaskStatus, TaskStatus> = {
-      todo: 'en_cours',
-      en_cours: 'done',
-      done: 'todo',
-      blocked: 'en_cours',
-      nappe_h: 'nappe_b',
-      nappe_b: 'terminaux',
-      terminaux: 'raccordement',
-      raccordement: 'done',
-    }
-    const newStatus = next[task.status] ?? 'en_cours'
+    const newStatus = nextStatus(task.status, role)
+    if (!newStatus) return // done : verrouillé pour le monteur
     await updateStatus(task.id, newStatus, {}, role ?? 'monteur')
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
   }
 
   const done = tasks.filter(t => t.status === 'done').length
+  const aControler = tasks.filter(t => t.status === 'a_controler').length
   const blocked = tasks.filter(t => t.status === 'blocked').length
   const enCours = tasks.filter(t => t.status === 'en_cours').length
-  const pct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0
+  const pct = tasks.length > 0 ? Math.round(((done + aControler) / tasks.length) * 100) : 0
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-64">
@@ -133,7 +126,8 @@ export default function ZoneTasksView() {
         <div className="px-4 py-3 bg-white border-b border-gray-100">
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-3 text-xs">
-              <span className="text-green-600 font-medium">✓ {done} terminée{done > 1 ? 's' : ''}</span>
+              <span className="text-green-600 font-medium">✓ {done} validée{done > 1 ? 's' : ''}</span>
+              {aControler > 0 && <span className="text-amber-600">◉ {aControler} à contrôler</span>}
               {enCours > 0 && <span className="text-blue-500">▶ {enCours} en cours</span>}
               {blocked > 0 && <span className="text-red-500">⚠ {blocked} bloquée{blocked > 1 ? 's' : ''}</span>}
             </div>
@@ -168,9 +162,9 @@ export default function ZoneTasksView() {
               key={task.id}
               className={`bg-white rounded-xl border-2 overflow-hidden
                 ${task.status === 'done' ? 'border-green-100 opacity-75' : ''}
+                ${task.status === 'a_controler' ? 'border-amber-200' : ''}
                 ${task.status === 'blocked' ? 'border-red-200' : ''}
                 ${task.status === 'en_cours' ? 'border-blue-200' : ''}
-                ${['nappe_h','nappe_b','terminaux','raccordement'].includes(task.status) ? 'border-orange-200' : ''}
                 ${task.status === 'todo' ? 'border-gray-100' : ''}`}
             >
               <div className="flex items-center gap-3 p-3">
@@ -180,11 +174,9 @@ export default function ZoneTasksView() {
                   className="flex-shrink-0 active:scale-90 touch-manipulation"
                 >
                   {task.status === 'done' && <CheckCircle size={22} className="text-green-500" />}
+                  {task.status === 'a_controler' && <CheckCircle size={22} className="text-amber-500" />}
                   {task.status === 'blocked' && <AlertCircle size={22} className="text-red-500" />}
                   {task.status === 'en_cours' && <Play size={22} className="text-blue-500" />}
-                  {['nappe_h','nappe_b','terminaux','raccordement'].includes(task.status) && (
-                    <Play size={22} className="text-orange-400" />
-                  )}
                   {task.status === 'todo' && <Clock size={22} className="text-gray-400" />}
                 </button>
 

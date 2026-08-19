@@ -4,11 +4,11 @@ import { CheckCircle, AlertCircle, Clock, Play, Plus, Minus, AlertTriangle, Chev
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
 import { currentMondayISO, formatDateFR, todayISO, addDays, formatDateISO, getSemaineLabel } from '@/utils/dates'
-import { calculerAvancement } from '@/utils/ppc'
+import { nextStatus, isTermine, PRIORITY_ORDER, STATUS_LABELS } from '@/utils/statusMachine'
 import ProgressBar from '@/components/ui/ProgressBar'
 import BlocageForm from './BlocageForm'
 import FinJourneeWizard from './FinJourneeWizard'
-import type { Task, TaskStatus, ContrainteType } from '@/types/models'
+import type { Task, ContrainteType } from '@/types/models'
 import { upsertContrainte } from '@/lib/supabase'
 
 // ── Utilitaires deadline ────────────────────────────────────
@@ -50,23 +50,12 @@ function getDeadlineInfo(dateplanifiee: string | null): {
   return { label: `${joursRestants} j`, color: 'bg-gray-100 text-gray-500', urgent: false }
 }
 
-// ── Tri par priorité ────────────────────────────────────────
-
-const PRIORITY_ORDER: Record<string, number> = {
-  blocked: 0,
-  en_cours: 1,
-  nappe_h: 2,
-  nappe_b: 3,
-  terminaux: 4,
-  raccordement: 5,
-  todo: 6,
-  done: 7,
-}
+// ── Tri par priorité (ordre défini dans statusMachine) ──────
 
 function sortByPriority(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
-    const pa = PRIORITY_ORDER[a.status] ?? 6
-    const pb = PRIORITY_ORDER[b.status] ?? 6
+    const pa = PRIORITY_ORDER[a.status] ?? 2
+    const pb = PRIORITY_ORDER[b.status] ?? 2
     if (pa !== pb) return pa - pb
     // À priorité égale, les retards d'abord
     const monday = currentMondayISO()
@@ -105,22 +94,21 @@ export default function MesTaches() {
 
   const sorted = sortByPriority(tasksDuJour)
   const tasksDone = tasksDuJour.filter(t => t.status === 'done').length
+  const tasksAControler = tasksDuJour.filter(t => t.status === 'a_controler').length
   const tasksBlocked = tasksDuJour.filter(t => t.status === 'blocked').length
-  const tasksEnCours = tasksDuJour.filter(t => t.status === 'en_cours' || ['nappe_h','nappe_b','terminaux','raccordement'].includes(t.status)).length
-  const avancement = calculerAvancement(tasksDuJour)
+  const tasksEnCours = tasksDuJour.filter(t => t.status === 'en_cours').length
+  // Avancement "déclaré" côté monteur : terminé (à contrôler) + validé
+  const avancement = tasksDuJour.length > 0
+    ? Math.round(((tasksDone + tasksAControler) / tasksDuJour.length) * 100)
+    : 0
 
   const handleStatusCycle = async (task: Task) => {
-    const next: Record<TaskStatus, TaskStatus> = {
-      todo:         'en_cours',
-      en_cours:     'done',
-      nappe_h:      'nappe_b',
-      nappe_b:      'terminaux',
-      terminaux:    'raccordement',
-      raccordement: 'done',
-      done:         'en_cours',  // annuler → remet en cours (conserve la progression)
-      blocked:      'en_cours',
-    }
-    await updateStatus(task.id, next[task.status] ?? 'en_cours', {}, role ?? 'monteur')
+    const next = nextStatus(task.status, role)
+    if (!next) return // done : verrouillé pour le monteur
+    const updates: Partial<Task> = {}
+    if (next === 'en_cours' && !task.date_debut_reel) updates.date_debut_reel = new Date().toISOString()
+    if (next === 'a_controler' && task.status === 'en_cours') updates.date_fin_reel = new Date().toISOString()
+    await updateStatus(task.id, next, updates, role ?? 'monteur')
   }
 
   const handleQtyChange = async (task: Task, delta: number) => {
@@ -194,9 +182,14 @@ export default function MesTaches() {
               <AlertCircle size={12} /> {tasksBlocked} bloquée{tasksBlocked > 1 ? 's' : ''}
             </span>
           )}
+          {tasksAControler > 0 && (
+            <span className="flex items-center gap-1 text-amber-600 font-medium">
+              <CheckCircle size={12} /> {tasksAControler} à contrôler
+            </span>
+          )}
           {tasksDone > 0 && (
             <span className="flex items-center gap-1 text-green-600 font-medium">
-              <CheckCircle size={12} /> {tasksDone} terminée{tasksDone > 1 ? 's' : ''}
+              <CheckCircle size={12} /> {tasksDone} validée{tasksDone > 1 ? 's' : ''}
             </span>
           )}
         </div>
@@ -208,7 +201,7 @@ export default function MesTaches() {
 
       {/* Bannière alerte : tâches en retard ou bloquées */}
       {(() => {
-        const hasRetard = tasksDuJour.some(t => t.date_planifiee && new Date(t.date_planifiee) < new Date(monday) && t.status !== 'done')
+        const hasRetard = tasksDuJour.some(t => t.date_planifiee && new Date(t.date_planifiee) < new Date(monday) && !isTermine(t.status))
         if (!tasksBlocked && !hasRetard) return null
         return (
           <div className="mb-4 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2">
@@ -285,7 +278,12 @@ export default function MesTaches() {
           equipe={equipe}
           utilisateur={utilisateur}
           onClose={() => setShowWizard(false)}
-          onQtyUpdate={(taskId, qte) => updateStatus(taskId, 'done', { qte_realisee: qte }, role ?? 'monteur')}
+          onQtyUpdate={(taskId, qte) => {
+            // La clôture de journée met à jour la quantité SANS changer
+            // le statut (avant : forçait 'done' — faux pour du partiel)
+            const t = tasksDuJour.find(x => x.id === taskId)
+            return updateStatus(taskId, t?.status ?? 'en_cours', { qte_realisee: qte }, role ?? 'monteur')
+          }}
         />
       )}
     </div>
@@ -305,42 +303,25 @@ function InlineTaskCard({
 }) {
   const pct = task.qte_prevue > 0
     ? Math.round((task.qte_realisee / task.qte_prevue) * 100)
-    : task.status === 'done' ? 100 : 0
-
-  const cvcPhases = ['nappe_h', 'nappe_b', 'terminaux', 'raccordement']
-  const isCvcPhase = cvcPhases.includes(task.status)
+    : isTermine(task.status) ? 100 : 0
 
   const statusColors: Record<string, string> = {
-    done:         'border-green-200 bg-green-50/50',
-    blocked:      'border-red-300 bg-red-50/40',
-    en_cours:     'border-blue-200 bg-blue-50/20',
-    todo:         'border-gray-100 bg-white',
-    nappe_h:      'border-orange-200 bg-orange-50/20',
-    nappe_b:      'border-orange-200 bg-orange-50/20',
-    terminaux:    'border-orange-200 bg-orange-50/20',
-    raccordement: 'border-orange-200 bg-orange-50/20',
+    done:        'border-green-200 bg-green-50/50',
+    a_controler: 'border-amber-200 bg-amber-50/40',
+    blocked:     'border-red-300 bg-red-50/40',
+    en_cours:    'border-blue-200 bg-blue-50/20',
+    todo:        'border-gray-100 bg-white',
   }
 
   const StatusIcon = () => {
     if (task.status === 'done') return <CheckCircle size={22} className="text-green-500" />
+    if (task.status === 'a_controler') return <CheckCircle size={22} className="text-amber-500" />
     if (task.status === 'blocked') return <AlertCircle size={22} className="text-red-500" />
     if (task.status === 'en_cours') return <Play size={22} className="text-blue-500" />
-    if (isCvcPhase) return <Play size={22} className="text-orange-400" />
     return <Clock size={22} className="text-gray-400" />
   }
 
-  const statusLabel: Record<string, string> = {
-    todo:         'À faire',
-    en_cours:     'En cours',
-    done:         'Terminé',
-    blocked:      'Bloqué',
-    nappe_h:      'Nappe H',
-    nappe_b:      'Nappe B',
-    terminaux:    'Terminaux',
-    raccordement: 'Raccordement',
-  }
-
-  const deadline = task.status !== 'done' ? getDeadlineInfo(task.date_planifiee) : null
+  const deadline = !isTermine(task.status) ? getDeadlineInfo(task.date_planifiee) : null
 
   return (
     <div className={`rounded-2xl border-2 shadow-sm overflow-hidden ${statusColors[task.status] ?? 'border-gray-100 bg-white'}`}>
@@ -350,18 +331,20 @@ function InlineTaskCard({
         <button
           onClick={onStatusCycle}
           className="flex-shrink-0 active:scale-90 transition-transform touch-manipulation"
-          title={`Statut: ${statusLabel[task.status]} → tap pour changer`}
+          title={`Statut: ${STATUS_LABELS[task.status]} → tap pour changer`}
         >
           <StatusIcon />
         </button>
 
         {/* Info tâche */}
         <div className="flex-1 min-w-0">
-          <p className={`font-semibold text-sm leading-tight ${task.status === 'done' ? 'line-through text-gray-400' : 'text-nc-blue'}`}>
+          <p className={`font-semibold text-sm leading-tight ${isTermine(task.status) ? 'line-through text-gray-400' : 'text-nc-blue'}`}>
             {task.label}
           </p>
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-            <span className="text-xs text-gray-400">{statusLabel[task.status]}</span>
+            <span className={`text-xs ${task.status === 'a_controler' ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
+              {STATUS_LABELS[task.status]}
+            </span>
             {/* Zone de travail */}
             {task.zone_takt?.name && (
               <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md font-medium">
@@ -400,14 +383,20 @@ function InlineTaskCard({
         </div>
       )}
 
-      {/* Actions rapides — toujours présentes pour permettre l'annulation */}
+      {/* Actions rapides — selon l'état du workflow */}
       <div className="flex items-center border-t border-gray-100/80 px-1 py-1 min-h-[40px]">
         {task.status === 'done' ? (
-          /* ── Tâche terminée : seul bouton = annuler ── */
+          /* ── Validée par le chef : verrouillée pour le monteur ── */
+          <div className="flex-1 flex items-center justify-center gap-2 py-1 text-xs font-medium text-green-600">
+            <CheckCircle size={13} />
+            Validée par le chef — verrouillée
+          </div>
+        ) : task.status === 'a_controler' ? (
+          /* ── Terminée, en attente de contrôle : annulable ── */
           <button
             onClick={onStatusCycle}
             className="flex-1 flex items-center justify-center gap-2 py-1 text-xs font-medium
-                       text-gray-400 hover:text-nc-blue hover:bg-gray-50 active:scale-95
+                       text-amber-600 hover:text-nc-blue hover:bg-gray-50 active:scale-95
                        transition-all rounded-xl touch-manipulation"
           >
             <RotateCcw size={13} />
