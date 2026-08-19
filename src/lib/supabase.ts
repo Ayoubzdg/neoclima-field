@@ -3,7 +3,7 @@ import type {
   Chantier, Secteur, ZoneTakt, CycleTakt, Task, TaskPhase,
   Contrainte, NonConformite, Mesure, Photo, TaskHistory,
   Effectif, Equipe, Utilisateur, WeeklyPlan, TaskType,
-  PlanVersion, Materiau, SyncQueueItem, VueAvancementZone,
+  PlanVersion, Materiau, VueAvancementZone,
   Entreprise, Personne, AccesChantier, LoginPersonneResult
 } from '@/types/models'
 
@@ -551,11 +551,28 @@ export async function upsertMesure(mesure: Partial<Mesure>): Promise<Mesure> {
 // ── PHOTOS ──────────────────────────────────────────────────
 
 export async function uploadPhoto(file: File, path: string): Promise<string> {
+  // Compression systématique avant upload : les photos caméra font
+  // plusieurs Mo — sur la 4G de chantier, c'est la différence entre
+  // un envoi instantané et une app qui rame. WebP 1200px ≈ 100-300 Ko.
+  let body: Blob = file
+  let finalPath = path
+  try {
+    const { compressImage } = await import('@/utils/qr')
+    body = await compressImage(file)
+    finalPath = path.replace(/\.[^.]+$/, '') + '.webp'
+  } catch {
+    // Compression impossible (format exotique, canvas indisponible)
+    // → on uploade l'original plutôt que de perdre la photo
+  }
   const { error } = await supabase.storage
     .from('photos')
-    .upload(path, file, { cacheControl: '3600', upsert: false })
+    .upload(finalPath, body, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: body === file ? file.type : 'image/webp'
+    })
   if (error) handleError(error, 'uploadPhoto')
-  const { data } = supabase.storage.from('photos').getPublicUrl(path)
+  const { data } = supabase.storage.from('photos').getPublicUrl(finalPath)
   return data.publicUrl
 }
 
@@ -1113,24 +1130,6 @@ export async function syncUtilisateurToPersonne(
   } catch {
     // Sync non bloquante : si elle échoue, l'utilisateur reste dans l'ancien système
     console.warn('[syncUtilisateurToPersonne] sync silently failed')
-  }
-}
-
-// ── SYNC QUEUE ──────────────────────────────────────────────
-
-export async function flushSyncQueue(items: SyncQueueItem[]): Promise<void> {
-  for (const item of items) {
-    try {
-      if (item.operation === 'insert') {
-        await supabase.from(item.table_name).insert(item.payload)
-      } else if (item.operation === 'update') {
-        await supabase.from(item.table_name).update(item.payload).eq('id', item.record_id)
-      } else if (item.operation === 'delete') {
-        await supabase.from(item.table_name).delete().eq('id', item.record_id)
-      }
-    } catch {
-      // Log silently — item stays in queue for retry
-    }
   }
 }
 
