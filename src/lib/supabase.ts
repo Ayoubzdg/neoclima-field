@@ -16,6 +16,29 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('⚠️ Variables Supabase manquantes. Copier .env.example vers .env et remplir les valeurs.')
 }
 
+// ── Jeton de session (JWT émis par l'Edge Function login) ──
+// Quand il est présent, TOUTES les requêtes PostgREST partent
+// avec ce JWT → les politiques RLS s'appliquent (étape 3).
+// Sans jeton (transition), l'anon key est utilisée comme avant.
+let sessionToken: string | null = null
+
+export function setSessionToken(token: string | null): void {
+  sessionToken = token
+  try {
+    // Le canal realtime doit aussi être authentifié
+    if (token) supabase.realtime.setAuth(token)
+  } catch { /* realtime pas encore connecté */ }
+}
+
+const authFetch: typeof fetch = (input, init) => {
+  if (sessionToken) {
+    const headers = new Headers(init?.headers)
+    headers.set('Authorization', `Bearer ${sessionToken}`)
+    return fetch(input, { ...init, headers })
+  }
+  return fetch(input, init)
+}
+
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key',
@@ -24,6 +47,7 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true
     },
+    global: { fetch: authFetch },
     realtime: {
       params: { eventsPerSecond: 10 }
     }
@@ -1063,6 +1087,35 @@ export async function loginPersonne(
   })
   if (error) return []
   return (data ?? []) as LoginPersonneResult[]
+}
+
+/**
+ * Login via l'Edge Function (sécurité étape 2) : vérifie le PIN
+ * HACHÉ côté serveur et retourne un JWT signé 12 h.
+ * Retourne null si la fonction n'est pas (encore) déployée →
+ * l'appelant retombe sur le RPC loginPersonne (transition).
+ */
+export async function loginPersonneEdge(
+  codeEntreprise: string,
+  codePin: string
+): Promise<{ token: string | null; results: LoginPersonneResult[] } | null> {
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ code_entreprise: codeEntreprise, code_pin: codePin }),
+    })
+    if (res.status === 404 || res.status === 401) return null // pas déployée
+    if (!res.ok) return null
+    const json = await res.json() as { token?: string; results?: LoginPersonneResult[] }
+    return { token: json.token ?? null, results: json.results ?? [] }
+  } catch {
+    return null // réseau / CORS → fallback RPC
+  }
 }
 
 // ── CRUD Entreprises ────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Utilisateur, Chantier, Equipe, UserRole, Personne, LoginPersonneResult } from '@/types/models'
-import { loginWithPin, logoutUser, getChantierById, loginPersonne as loginPersonneRPC, getEquipes } from '@/lib/supabase'
+import { loginWithPin, logoutUser, getChantierById, loginPersonne as loginPersonneRPC, loginPersonneEdge, getEquipes, setSessionToken } from '@/lib/supabase'
 
 interface AuthState {
   // ── Session courante ───────────────────────────────────────
@@ -15,6 +15,8 @@ interface AuthState {
   entrepriseName: string | null
   /** Timestamp du login — la session expire après 12 h */
   loginAt: number | null
+  /** JWT émis par l'Edge Function login (null en mode transition) */
+  jwt: string | null
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
@@ -49,6 +51,7 @@ export const useAuthStore = create<AuthState>()(
       entrepriseId: null,
       entrepriseName: null,
       loginAt: null,
+      jwt: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -93,7 +96,19 @@ export const useAuthStore = create<AuthState>()(
       loginPersonneStep: async (codeEntreprise: string, codePin: string) => {
         set({ isLoading: true, error: null, codeEntrepriseSession: codeEntreprise })
         try {
-          const results = await loginPersonneRPC(codeEntreprise, codePin)
+          // Sécurité étape 2 : Edge Function (PIN haché + JWT signé).
+          // Si elle n'est pas déployée → fallback sur le RPC historique.
+          let results: LoginPersonneResult[]
+          const edge = await loginPersonneEdge(codeEntreprise, codePin)
+          if (edge) {
+            results = edge.results
+            if (edge.token) {
+              setSessionToken(edge.token)
+              set({ jwt: edge.token })
+            }
+          } else {
+            results = await loginPersonneRPC(codeEntreprise, codePin)
+          }
           set({ isLoading: false })
 
           if (results.length === 0) {
@@ -192,6 +207,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         logoutUser()
+        setSessionToken(null)
         set({
           utilisateur: null,
           personne: null,
@@ -201,6 +217,7 @@ export const useAuthStore = create<AuthState>()(
           entrepriseId: null,
           entrepriseName: null,
           loginAt: null,
+          jwt: null,
           isAuthenticated: false,
           error: null,
           codeEntrepriseSession: null
@@ -225,8 +242,13 @@ export const useAuthStore = create<AuthState>()(
         entrepriseId: state.entrepriseId,
         entrepriseName: state.entrepriseName,
         loginAt: state.loginAt,
+        jwt: state.jwt,
         isAuthenticated: state.isAuthenticated
-      })
+      }),
+      // Au rechargement de l'app : réinjecter le JWT dans le client
+      onRehydrateStorage: () => (state) => {
+        if (state?.jwt) setSessionToken(state.jwt)
+      }
     }
   )
 )
