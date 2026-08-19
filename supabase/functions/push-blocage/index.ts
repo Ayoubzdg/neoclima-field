@@ -23,8 +23,11 @@ Deno.serve(async (req) => {
     const record = payload.record
     const old = payload.old_record
     if (!record || record.status !== 'blocked' || old?.status === 'blocked') {
+      // Update sans transition vers "blocked" → ignoré (log discret)
       return new Response(JSON.stringify({ skipped: true }), { status: 200 })
     }
+
+    console.log(`[push-blocage] blocage détecté : "${record.label}" (${record.type_blocage ?? '?'})`)
 
     const vapidPublic = Deno.env.get('VAPID_PUBLIC_KEY')
     const vapidPrivate = Deno.env.get('VAPID_PRIVATE_KEY')
@@ -51,8 +54,10 @@ Deno.serve(async (req) => {
       .in('role', ['chef', 'ca', 'admin'])
 
     if (!subs || subs.length === 0) {
+      console.log('[push-blocage] AUCUN abonné (push_subs vide pour chef/ca/admin) — rien envoyé')
       return new Response(JSON.stringify({ sent: 0 }), { status: 200 })
     }
+    console.log(`[push-blocage] ${subs.length} abonné(s) trouvé(s)`)
 
     const message = JSON.stringify({
       title: '🚫 Blocage signalé',
@@ -70,14 +75,17 @@ Deno.serve(async (req) => {
         )
         sent++
       } catch (e) {
-        // 404/410 = abonnement mort (app désinstallée…) → nettoyage
         const code = (e as { statusCode?: number }).statusCode
+        console.error(`[push-blocage] échec envoi (HTTP ${code ?? '?'}) : ${(e as Error).message?.slice(0, 200)}`)
+        // 404/410 = abonnement mort (app désinstallée…) → nettoyage
         if (code === 404 || code === 410) {
           await admin.from('push_subs').delete().eq('endpoint', s.endpoint)
+          console.log('[push-blocage] abonnement mort supprimé')
         }
       }
     }
 
+    console.log(`[push-blocage] résultat : ${sent}/${subs.length} notification(s) envoyée(s)`)
     return new Response(JSON.stringify({ sent }), { status: 200 })
   } catch (e) {
     console.error('[push-blocage]', e)
