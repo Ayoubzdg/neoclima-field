@@ -56,7 +56,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     if (get().isSyncing) return
     set({ isSyncing: true })
     try {
-      const { synced, errors } = await syncOfflineQueue()
+      const { synced, errors, abandoned } = await syncOfflineQueue()
       if (synced > 0) {
         get().addNotification({
           type: 'success',
@@ -69,6 +69,13 @@ export const useUiStore = create<UiState>((set, get) => ({
           type: 'warning',
           message: `${errors} action${errors > 1 ? 's' : ''} en erreur — retry automatique`,
           autoDismiss: true
+        })
+      }
+      if (abandoned > 0) {
+        get().addNotification({
+          type: 'error',
+          message: `${abandoned} action${abandoned > 1 ? 's' : ''} impossible${abandoned > 1 ? 's' : ''} à synchroniser — abandonnée${abandoned > 1 ? 's' : ''}. Vérifie tes dernières saisies.`,
+          autoDismiss: false
         })
       }
     } finally {

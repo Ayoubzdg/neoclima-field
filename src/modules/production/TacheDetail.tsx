@@ -6,7 +6,9 @@ import {
 } from 'lucide-react'
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
-import { getTaskById, uploadPhoto, savePhoto, getPhotosByTask } from '@/lib/supabase'
+import { getTaskById, preparePhoto, uploadPhotoBlob, savePhoto, getPhotosByTask } from '@/lib/supabase'
+import { addPhotoOffline } from '@/lib/offline/db'
+import { useUiStore } from '@/store/uiStore'
 import StatusBadge from '@/components/ui/StatusBadge'
 import ProgressBar from '@/components/ui/ProgressBar'
 import BlocageForm from './BlocageForm'
@@ -72,9 +74,11 @@ export default function TacheDetail() {
     const file = e.target.files?.[0]
     if (!file || !task) return
     setIsUploadingPhoto(true)
+    const rawPath = `tasks/${task.id}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`
+    // Compression d'abord (le blob compressé part en ligne OU en file offline)
+    const prepared = await preparePhoto(file, rawPath)
     try {
-      const path = `tasks/${task.id}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`
-      const url = await uploadPhoto(file, path)
+      const url = await uploadPhotoBlob(prepared.body, prepared.path, prepared.contentType)
       const photo = await savePhoto({
         task_id: task.id,
         zone_takt_id: task.zone_takt_id ?? task.zone_takt?.id ?? '',
@@ -84,8 +88,25 @@ export default function TacheDetail() {
         legende: null,
       })
       setPhotos(prev => [photo, ...prev])
-    } catch (err) {
-      console.error('Erreur upload photo:', err)
+    } catch {
+      // Hors ligne / échec réseau → file Dexie, JAMAIS de photo perdue
+      await addPhotoOffline({
+        task_id: task.id,
+        zone_takt_id: task.zone_takt_id ?? task.zone_takt?.id ?? '',
+        nc_id: null,
+        path: prepared.path,
+        contentType: prepared.contentType,
+        type: 'avant',
+        auteur_role: role ?? null,
+        blob: prepared.body,
+        created_at: new Date().toISOString(),
+      })
+      useUiStore.getState().addNotification({
+        type: 'info',
+        message: 'Photo enregistrée — elle partira au retour du réseau',
+        autoDismiss: true,
+      })
+      useUiStore.getState().refreshSyncCount()
     } finally {
       setIsUploadingPhoto(false)
       if (photoInputRef.current) photoInputRef.current.value = ''

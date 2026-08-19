@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Camera, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react'
-import { supabase, uploadPhoto, savePhoto } from '@/lib/supabase'
+import { supabase, preparePhoto, uploadPhotoBlob, savePhoto } from '@/lib/supabase'
+import { addPhotoOffline } from '@/lib/offline/db'
+import { useUiStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { useQualiteStore } from '@/store/qualiteStore'
 import { formatDateFR } from '@/utils/dates'
@@ -37,9 +39,10 @@ export default function NcDetail() {
     const file = e.target.files?.[0]
     if (!file || !nc) return
     setIsUploadingPhoto(true)
+    const rawPath = `nc/${nc.id}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`
+    const prepared = await preparePhoto(file, rawPath)
     try {
-      const path = `nc/${nc.id}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`
-      const url = await uploadPhoto(file, path)
+      const url = await uploadPhotoBlob(prepared.body, prepared.path, prepared.contentType)
       const photo = await savePhoto({
         nc_id: nc.id,
         task_id: null,
@@ -50,8 +53,25 @@ export default function NcDetail() {
         legende: 'Après correction',
       })
       setNc(prev => prev ? { ...prev, photos: [photo, ...(prev.photos ?? [])] } : prev)
-    } catch (err) {
-      console.error('Erreur upload photo NC:', err)
+    } catch {
+      // Hors ligne / échec → file offline, jamais de photo perdue
+      await addPhotoOffline({
+        nc_id: nc.id,
+        task_id: null,
+        zone_takt_id: nc.zone_takt_id,
+        path: prepared.path,
+        contentType: prepared.contentType,
+        type: 'apres',
+        auteur_role: role ?? null,
+        blob: prepared.body,
+        created_at: new Date().toISOString(),
+      })
+      useUiStore.getState().addNotification({
+        type: 'info',
+        message: 'Photo enregistrée — elle partira au retour du réseau',
+        autoDismiss: true,
+      })
+      useUiStore.getState().refreshSyncCount()
     } finally {
       setIsUploadingPhoto(false)
       if (photoInputRef.current) photoInputRef.current.value = ''

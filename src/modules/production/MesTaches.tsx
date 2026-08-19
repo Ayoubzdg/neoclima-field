@@ -73,7 +73,7 @@ function sortByPriority(tasks: Task[]): Task[] {
 export default function MesTaches() {
   const navigate = useNavigate()
   const { equipe, role, utilisateur } = useAuthStore()
-  const { tasksDuJour, isLoading, loadTasksDuJour, updateStatus } = useProductionStore()
+  const { tasksDuJour, isLoading, error, loadTasksDuJour, updateStatus, updateQty } = useProductionStore()
   const today = todayISO()
   const monday = currentMondayISO()
 
@@ -112,9 +112,13 @@ export default function MesTaches() {
   }
 
   const handleQtyChange = async (task: Task, delta: number) => {
+    // Delta clampé entre 0 et le plafond, puis envoyé en ATOMIQUE :
+    // deux saisies simultanées s'additionnent au lieu de s'écraser
     const cap = Math.max(task.qte_prevue * 2, task.qte_prevue + 20)
     const newQte = Math.min(cap, Math.max(0, task.qte_realisee + delta))
-    await updateStatus(task.id, task.status, { qte_realisee: newQte }, role ?? 'monteur')
+    const effectiveDelta = newQte - task.qte_realisee
+    if (effectiveDelta === 0) return
+    await updateQty(task.id, effectiveDelta, role ?? 'monteur')
   }
 
   const handleBlocageSubmit = async (type: ContrainteType, comment: string) => {
@@ -219,7 +223,19 @@ export default function MesTaches() {
       })()}
 
       {/* Liste des tâches */}
-      {sorted.length === 0 ? (
+      {sorted.length === 0 && error ? (
+        /* Erreur réseau ≠ "rien à faire" — distinction cruciale */
+        <div className="text-center py-16">
+          <AlertTriangle size={40} className="mx-auto mb-3 text-amber-400" />
+          <p className="font-medium text-gray-600">{error}</p>
+          <button
+            onClick={() => equipe?.id && loadTasksDuJour(equipe.id, monday)}
+            className="mt-4 btn-secondary text-sm"
+          >
+            Réessayer
+          </button>
+        </div>
+      ) : sorted.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <CheckCircle size={40} className="mx-auto mb-3 opacity-40" />
           <p className="font-medium text-gray-500">Aucune tâche planifiée cette semaine</p>

@@ -1,25 +1,43 @@
-import { db, getPendingSyncItems, markSyncItemDone, clearSyncedItems } from './db'
-import { supabase } from '@/lib/supabase'
+import {
+  db, getPendingSyncItems, markSyncItemDone, clearSyncedItems,
+  getPendingPhotos, deletePhotoOffline
+} from './db'
+import { supabase, uploadPhotoBlob, savePhoto } from '@/lib/supabase'
 
 // ── Sync orchestrator ───────────────────────────────────────
 
 let isSyncing = false
 
-export async function syncOfflineQueue(): Promise<{ synced: number; errors: number }> {
-  if (isSyncing) return { synced: 0, errors: 0 }
+/** Au-delà, l'action est abandonnée (et signalée) au lieu de bloquer la file à vie */
+const MAX_RETRIES = 8
+
+export interface SyncResult {
+  synced: number
+  errors: number
+  /** Actions définitivement abandonnées après MAX_RETRIES échecs */
+  abandoned: number
+}
+
+export async function syncOfflineQueue(): Promise<SyncResult> {
+  if (isSyncing) return { synced: 0, errors: 0, abandoned: 0 }
   isSyncing = true
 
   let synced = 0
   let errors = 0
+  let abandoned = 0
 
   try {
     const pending = await getPendingSyncItems()
-    if (pending.length === 0) {
-      isSyncing = false
-      return { synced: 0, errors: 0 }
-    }
 
     for (const item of pending) {
+      // Plafond de retries : un item invalide (ex: tâche supprimée
+      // côté serveur) ne doit pas bloquer le compteur pour toujours
+      if (item.retry_count >= MAX_RETRIES) {
+        if (item.localId !== undefined) await markSyncItemDone(item.localId)
+        abandoned++
+        continue
+      }
+
       try {
         let success = false
 
@@ -31,6 +49,13 @@ export async function syncOfflineQueue(): Promise<{ synced: number; errors: numb
             .from(item.table_name)
             .update(item.payload)
             .eq('id', item.record_id)
+          success = !error
+        } else if (item.operation === 'increment' && item.record_id) {
+          // Delta de quantité → RPC atomique (s'additionne côté serveur)
+          const { error } = await supabase.rpc('increment_qte_realisee', {
+            p_task_id: item.record_id,
+            p_delta: (item.payload as { delta: number }).delta,
+          })
           success = !error
         } else if (item.operation === 'delete' && item.record_id) {
           const { error } = await supabase
@@ -45,7 +70,6 @@ export async function syncOfflineQueue(): Promise<{ synced: number; errors: numb
           synced++
         } else {
           errors++
-          // Incrémenter le retry count
           if (item.localId !== undefined) {
             await db.sync_queue.update(item.localId, {
               retry_count: item.retry_count + 1
@@ -57,29 +81,41 @@ export async function syncOfflineQueue(): Promise<{ synced: number; errors: numb
       }
     }
 
+    // ── Photos en attente ───────────────────────────────────
+    const pendingPhotos = await getPendingPhotos()
+    for (const p of pendingPhotos) {
+      if (p.retry_count >= MAX_RETRIES) {
+        if (p.localId !== undefined) await deletePhotoOffline(p.localId)
+        abandoned++
+        continue
+      }
+      try {
+        const url = await uploadPhotoBlob(p.blob, p.path, p.contentType)
+        await savePhoto({
+          task_id: p.task_id ?? undefined,
+          nc_id: p.nc_id ?? undefined,
+          zone_takt_id: p.zone_takt_id,
+          url,
+          type: p.type as never,
+          auteur_role: (p.auteur_role ?? null) as never,
+          legende: null,
+        })
+        if (p.localId !== undefined) await deletePhotoOffline(p.localId)
+        synced++
+      } catch {
+        errors++
+        if (p.localId !== undefined) {
+          await db.photos_offline.update(p.localId, { retry_count: p.retry_count + 1 })
+        }
+      }
+    }
+
     await clearSyncedItems()
   } finally {
     isSyncing = false
   }
 
-  return { synced, errors }
-}
-
-// ── Conflit resolution ──────────────────────────────────────
-// Règle : Last-Write-Wins sur statuts simples
-// Exception : status=done sur serveur + status=blocked en local → garder blocked
-
-export async function resolveTaskConflict(
-  serverId: string,
-  serverStatus: string,
-  localStatus: string
-): Promise<string> {
-  if (serverStatus === 'done' && localStatus === 'blocked') {
-    // Priorité au blocage local — le monteur sait ce qui se passe
-    return 'blocked'
-  }
-  // Dans tous les autres cas, le serveur gagne
-  return serverStatus
+  return { synced, errors, abandoned }
 }
 
 // ── Background sync (Service Worker message) ───────────────

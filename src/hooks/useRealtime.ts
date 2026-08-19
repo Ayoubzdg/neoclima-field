@@ -35,16 +35,25 @@ export function useRealtime(chantierId: string | null) {
       }
     })
 
-    // ── Polling de secours toutes les 30 s ───────────────────
+    // ── Polling de secours toutes les 60 s ───────────────────
     // Garantit la fraîcheur si le realtime Supabase n'est pas activé
     // sur la table ou si la connexion websocket est coupée.
     pollRef.current = setInterval(() => {
       loadAllTasks(chantierId)
-    }, 30_000)
+    }, 60_000)
+
+    // ── Refresh au retour sur l'app ──────────────────────────
+    // C'est CE refresh qui donne la sensation de fraîcheur : quand
+    // le chef rouvre l'app/l'onglet, les données se rechargent.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadAllTasks(chantierId)
+    }
+    document.addEventListener('visibilitychange', onVisible)
 
     return () => {
       channel.unsubscribe()
       if (pollRef.current) clearInterval(pollRef.current)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [chantierId, updateTaskLocal, loadAllTasks])
 }

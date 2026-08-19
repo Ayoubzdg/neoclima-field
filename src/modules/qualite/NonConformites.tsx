@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { Shield, Plus, AlertTriangle, ChevronRight, X, Check, Loader2, Camera, ImageIcon } from 'lucide-react'
 import { useQualiteStore } from '@/store/qualiteStore'
 import { useAuthStore } from '@/store/authStore'
-import { getZonesByChantier, uploadPhoto, savePhoto } from '@/lib/supabase'
+import { getZonesByChantier, preparePhoto, uploadPhotoBlob, savePhoto } from '@/lib/supabase'
+import { addPhotoOffline } from '@/lib/offline/db'
+import { useUiStore } from '@/store/uiStore'
 import { formatDateShort, todayISO } from '@/utils/dates'
 import type { NcGravite, NcStatut, ZoneTakt } from '@/types/models'
 
@@ -90,19 +92,41 @@ function NouvelleNcPanel({ onClose, onCreated }: { onClose: () => void; onCreate
         date_echeance: form.date_echeance || null,
       })
 
-      // 2. Uploader la photo si présente
+      // 2. Uploader la photo si présente — un échec photo ne doit
+      //    pas faire échouer la NC (déjà créée) : file offline
       if (photoFile && created?.id) {
-        const path = `nc/${created.id}/${Date.now()}-${photoFile.name.replace(/\s+/g, '_')}`
-        const url = await uploadPhoto(photoFile, path)
-        await savePhoto({
-          nc_id: created.id,
-          task_id: null,
-          zone_takt_id: form.zone_takt_id,
-          url,
-          type: 'avant',
-          auteur_role: role ?? null,
-          legende: 'Photo de constat',
-        })
+        const rawPath = `nc/${created.id}/${Date.now()}-${photoFile.name.replace(/\s+/g, '_')}`
+        const prepared = await preparePhoto(photoFile, rawPath)
+        try {
+          const url = await uploadPhotoBlob(prepared.body, prepared.path, prepared.contentType)
+          await savePhoto({
+            nc_id: created.id,
+            task_id: null,
+            zone_takt_id: form.zone_takt_id,
+            url,
+            type: 'avant',
+            auteur_role: role ?? null,
+            legende: 'Photo de constat',
+          })
+        } catch {
+          await addPhotoOffline({
+            nc_id: created.id,
+            task_id: null,
+            zone_takt_id: form.zone_takt_id,
+            path: prepared.path,
+            contentType: prepared.contentType,
+            type: 'avant',
+            auteur_role: role ?? null,
+            blob: prepared.body,
+            created_at: new Date().toISOString(),
+          })
+          useUiStore.getState().addNotification({
+            type: 'info',
+            message: 'Photo enregistrée — elle partira au retour du réseau',
+            autoDismiss: true,
+          })
+          useUiStore.getState().refreshSyncCount()
+        }
       }
 
       onCreated()

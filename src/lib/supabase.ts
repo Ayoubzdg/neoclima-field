@@ -392,6 +392,51 @@ export async function updateTaskStatus(id: string, status: Task['status'], updat
   return data as Task
 }
 
+/**
+ * Verrou optimiste : l'UPDATE n'aboutit que si la tâche n'a pas
+ * bougé depuis notre dernière lecture (updated_at identique).
+ * En cas de conflit, retourne l'état serveur actuel — l'appelant
+ * décide (recharger, fusionner, prévenir l'utilisateur), mais
+ * n'écrase JAMAIS silencieusement la modification de l'autre.
+ */
+export async function updateTaskStatusSafe(
+  id: string,
+  status: Task['status'],
+  updates: Partial<Task>,
+  expectedUpdatedAt: string | null
+): Promise<{ task: Task | null; conflict: boolean }> {
+  const payload: Partial<Task> = { status, ...updates, updated_at: new Date().toISOString() }
+
+  let query = supabase.from('tasks').update(payload).eq('id', id)
+  if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt)
+
+  const { data, error } = await query.select()
+  if (error) handleError(error, 'updateTaskStatusSafe')
+
+  const rows = (data ?? []) as Task[]
+  if (rows.length > 0) return { task: rows[0], conflict: false }
+
+  // 0 ligne touchée → quelqu'un a modifié la tâche entre-temps
+  const { data: current } = await supabase
+    .from('tasks')
+    .select('*, equipe:equipes(*), zone_takt:zones_takt(*, secteur:secteurs(*))')
+    .eq('id', id)
+    .single()
+  return { task: (current as Task) ?? null, conflict: true }
+}
+
+/**
+ * Quantité en DELTA atomique (RPC) : deux saisies simultanées
+ * s'additionnent côté serveur au lieu de s'écraser.
+ */
+export async function incrementQteRealisee(taskId: string, delta: number): Promise<Task | null> {
+  const { data, error } = await supabase
+    .rpc('increment_qte_realisee', { p_task_id: taskId, p_delta: delta })
+  if (error) handleError(error, 'incrementQteRealisee')
+  const rows = (data ?? []) as Task[]
+  return rows[0] ?? null
+}
+
 export async function upsertTask(task: Partial<Task>): Promise<Task> {
   const { data, error } = await supabase
     .from('tasks')
@@ -550,30 +595,37 @@ export async function upsertMesure(mesure: Partial<Mesure>): Promise<Mesure> {
 
 // ── PHOTOS ──────────────────────────────────────────────────
 
-export async function uploadPhoto(file: File, path: string): Promise<string> {
-  // Compression systématique avant upload : les photos caméra font
-  // plusieurs Mo — sur la 4G de chantier, c'est la différence entre
-  // un envoi instantané et une app qui rame. WebP 1200px ≈ 100-300 Ko.
-  let body: Blob = file
-  let finalPath = path
-  try {
-    const { compressImage } = await import('@/utils/qr')
-    body = await compressImage(file)
-    finalPath = path.replace(/\.[^.]+$/, '') + '.webp'
-  } catch {
-    // Compression impossible (format exotique, canvas indisponible)
-    // → on uploade l'original plutôt que de perdre la photo
-  }
+/** Upload bas niveau d'un blob déjà prêt (utilisé aussi par la sync offline) */
+export async function uploadPhotoBlob(body: Blob, path: string, contentType: string): Promise<string> {
   const { error } = await supabase.storage
     .from('photos')
-    .upload(finalPath, body, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType: body === file ? file.type : 'image/webp'
-    })
-  if (error) handleError(error, 'uploadPhoto')
-  const { data } = supabase.storage.from('photos').getPublicUrl(finalPath)
+    .upload(path, body, { cacheControl: '3600', upsert: false, contentType })
+  if (error) handleError(error, 'uploadPhotoBlob')
+  const { data } = supabase.storage.from('photos').getPublicUrl(path)
   return data.publicUrl
+}
+
+/**
+ * Compresse une photo avant upload. Les photos caméra font
+ * plusieurs Mo — sur la 4G de chantier, c'est la différence entre
+ * un envoi instantané et une app qui rame. WebP 1200px ≈ 100-300 Ko.
+ * Retourne le blob + le chemin final (.webp) + le contentType.
+ */
+export async function preparePhoto(file: File, path: string): Promise<{ body: Blob; path: string; contentType: string }> {
+  try {
+    const { compressImage } = await import('@/utils/qr')
+    const body = await compressImage(file)
+    return { body, path: path.replace(/\.[^.]+$/, '') + '.webp', contentType: 'image/webp' }
+  } catch {
+    // Compression impossible (format exotique, canvas indisponible)
+    // → on garde l'original plutôt que de perdre la photo
+    return { body: file, path, contentType: file.type || 'image/jpeg' }
+  }
+}
+
+export async function uploadPhoto(file: File, path: string): Promise<string> {
+  const prepared = await preparePhoto(file, path)
+  return uploadPhotoBlob(prepared.body, prepared.path, prepared.contentType)
 }
 
 export async function savePhoto(photo: Partial<Photo>): Promise<Photo> {

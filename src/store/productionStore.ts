@@ -2,9 +2,10 @@ import { create } from 'zustand'
 import type { Task, Equipe, Effectif, TaskStatus } from '@/types/models'
 import {
   getTasksDuJour, getTasksByChantier, getEquipes, getEffectifs,
-  updateTaskStatus, upsertTask, addTaskHistory
+  updateTaskStatusSafe, incrementQteRealisee, addTaskHistory
 } from '@/lib/supabase'
-import { addToSyncQueue, updateTaskOffline, getTasksOffline } from '@/lib/offline/db'
+import { addToSyncQueue, updateTaskOffline, getTasksOffline, cacheDonneesTerrain } from '@/lib/offline/db'
+import { useUiStore } from '@/store/uiStore'
 
 interface ProductionState {
   // Data
@@ -25,6 +26,8 @@ interface ProductionState {
   loadEquipes: (chantierId: string) => Promise<void>
   loadEffectifs: (chantierId: string, date: string) => Promise<void>
   updateStatus: (taskId: string, status: TaskStatus, updates?: Partial<Task>, userRole?: string) => Promise<void>
+  /** Quantité en delta atomique — deux saisies simultanées s'additionnent */
+  updateQty: (taskId: string, delta: number, userRole?: string) => Promise<void>
   setOnline: (online: boolean) => void
   updateTaskLocal: (taskId: string, updates: Partial<Task>) => void
 }
@@ -45,15 +48,25 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
       if (get().isOnline) {
         const tasks = await getTasksDuJour(equipeId, date)
         set({ tasksDuJour: tasks, isLoading: false, lastSyncAt: new Date().toISOString() })
+        // Alimenter le cache offline : l'app s'ouvrira avec les
+        // données du dernier passage réseau, même sans connexion
+        cacheDonneesTerrain({
+          tasks, zones: [], phases: [], contraintes: [],
+          equipes: get().equipes, taskTypes: [],
+        }).catch(() => { /* cache best-effort */ })
       } else {
-        // Mode offline : lire depuis Dexie
         const tasks = await getTasksOffline(equipeId, date)
         set({ tasksDuJour: tasks, isLoading: false })
       }
-    } catch (err) {
-      // Fallback offline
+    } catch {
+      // Erreur réseau → fallback sur le cache, en le SIGNALANT
+      // (avant : erreur avalée → "Aucune tâche" mensonger)
       const tasks = await getTasksOffline(equipeId, date)
-      set({ tasksDuJour: tasks, isLoading: false, error: null })
+      set({
+        tasksDuJour: tasks,
+        isLoading: false,
+        error: tasks.length === 0 ? 'Impossible de charger les tâches — vérifie ta connexion' : null,
+      })
     }
   },
 
@@ -89,7 +102,11 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   updateStatus: async (taskId: string, status: TaskStatus, updates?: Partial<Task>, userRole = 'monteur') => {
     const { isOnline, tasksDuJour, allTasks } = get()
 
-    // Optimistic update
+    // Version connue localement → base du verrou optimiste
+    const known = tasksDuJour.find(t => t.id === taskId) ?? allTasks.find(t => t.id === taskId)
+    const expectedUpdatedAt = known?.updated_at ?? null
+
+    // Optimistic update local
     const updateInList = (tasks: Task[]) =>
       tasks.map(t => t.id === taskId ? { ...t, status, ...updates, updated_at: new Date().toISOString() } : t)
 
@@ -100,10 +117,22 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
 
     if (isOnline) {
       try {
-        await updateTaskStatus(taskId, status, updates)
+        const { task, conflict } = await updateTaskStatusSafe(taskId, status, updates ?? {}, expectedUpdatedAt)
+        if (conflict && task) {
+          // Quelqu'un a modifié la tâche entre-temps → on reprend
+          // l'état serveur et on PRÉVIENT, on n'écrase jamais en douce
+          get().updateTaskLocal(taskId, task)
+          useUiStore.getState().addNotification({
+            type: 'warning',
+            message: `"${task.label ?? 'Tâche'}" modifiée par quelqu'un d'autre — état rechargé`,
+            autoDismiss: true,
+          })
+          return
+        }
+        if (task) get().updateTaskLocal(taskId, task)
         await addTaskHistory(taskId, userRole, 'status_change', `→ ${status}`)
       } catch {
-        // En cas d'erreur, écrire dans la sync queue
+        // Erreur réseau → sync queue
         await addToSyncQueue({
           id: crypto.randomUUID(),
           table_name: 'tasks',
@@ -126,6 +155,45 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
         synced: false,
         created_at: new Date().toISOString()
       })
+    }
+  },
+
+  updateQty: async (taskId: string, delta: number, _userRole = 'monteur') => {
+    if (delta === 0) return
+    const { isOnline, tasksDuJour, allTasks } = get()
+
+    // Optimistic local (clampé ≥ 0)
+    const bump = (tasks: Task[]) =>
+      tasks.map(t => t.id === taskId
+        ? { ...t, qte_realisee: Math.max(0, t.qte_realisee + delta), updated_at: new Date().toISOString() }
+        : t)
+    set({ tasksDuJour: bump(tasksDuJour), allTasks: bump(allTasks) })
+
+    const queueDelta = async () => {
+      const t = get().tasksDuJour.find(x => x.id === taskId) ?? get().allTasks.find(x => x.id === taskId)
+      if (t) await updateTaskOffline(taskId, { qte_realisee: t.qte_realisee })
+      await addToSyncQueue({
+        id: crypto.randomUUID(),
+        table_name: 'tasks',
+        operation: 'increment',
+        record_id: taskId,
+        payload: { delta },
+        synced: false,
+        created_at: new Date().toISOString()
+      })
+    }
+
+    if (isOnline) {
+      try {
+        // Delta ATOMIQUE côté serveur : deux saisies simultanées
+        // s'additionnent au lieu de s'écraser (RPC increment_qte_realisee)
+        const task = await incrementQteRealisee(taskId, delta)
+        if (task) get().updateTaskLocal(taskId, task)
+      } catch {
+        await queueDelta()
+      }
+    } else {
+      await queueDelta()
     }
   },
 

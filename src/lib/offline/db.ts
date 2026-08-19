@@ -7,10 +7,26 @@ export interface LocalSyncItem {
   localId?: number
   id: string
   table_name: string
-  operation: 'insert' | 'update' | 'delete'
+  /** 'increment' = delta de quantité rejoué via RPC atomique */
+  operation: 'insert' | 'update' | 'delete' | 'increment'
   record_id: string | null
   payload: Record<string, unknown>
   synced: boolean
+  created_at: string
+  retry_count: number
+}
+
+/** Photo prise hors ligne, en attente d'upload */
+export interface LocalPhoto {
+  localId?: number
+  task_id: string | null
+  zone_takt_id: string
+  nc_id: string | null
+  path: string
+  contentType: string
+  type: string
+  auteur_role: string | null
+  blob: Blob
   created_at: string
   retry_count: number
 }
@@ -27,6 +43,7 @@ class NCTrackerDB extends Dexie {
   utilisateurs!: Table<Utilisateur>
   task_types!: Table<TaskType>
   sync_queue!: Table<LocalSyncItem>
+  photos_offline!: Table<LocalPhoto>
 
   constructor() {
     super('NCTracker')
@@ -41,6 +58,11 @@ class NCTrackerDB extends Dexie {
       utilisateurs: 'id, chantier_id, equipe_id, role',
       task_types: 'id, chantier_id',
       sync_queue: '++localId, id, synced, created_at'
+    })
+
+    // v2 : file des photos prises hors ligne (blob compressé en attente)
+    this.version(2).stores({
+      photos_offline: '++localId, task_id, created_at'
     })
   }
 }
@@ -95,5 +117,21 @@ export async function clearSyncedItems(): Promise<void> {
 }
 
 export async function countPendingSync(): Promise<number> {
-  return db.sync_queue.where('synced').equals(0).count()
+  const queue = await db.sync_queue.where('synced').equals(0).count()
+  const photos = await db.photos_offline.count()
+  return queue + photos
+}
+
+// ── Photos hors ligne ───────────────────────────────────────
+
+export async function addPhotoOffline(photo: Omit<LocalPhoto, 'localId' | 'retry_count'>): Promise<void> {
+  await db.photos_offline.add({ ...photo, retry_count: 0 })
+}
+
+export async function getPendingPhotos(): Promise<LocalPhoto[]> {
+  return db.photos_offline.orderBy('created_at').toArray()
+}
+
+export async function deletePhotoOffline(localId: number): Promise<void> {
+  await db.photos_offline.delete(localId)
 }
