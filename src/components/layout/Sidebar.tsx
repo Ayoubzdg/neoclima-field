@@ -58,7 +58,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/reporting',               icon: <BarChart3 size={18} />,    label: 'Rapport hebdo',    roles: ['ca', 'admin'] },
       { to: '/reporting/bon-travail',   icon: <ClipboardList size={18} />,label: 'Bon de travail',   roles: ['chef', 'ca', 'admin'] },
-      { to: '/reporting/financier',     icon: <BarChart2 size={18} />,    label: 'Tableau financier',roles: ['ca', 'admin'] },
     ]
   },
   {

@@ -36,7 +36,6 @@ import Effectifs from '@/modules/equipes/Effectifs'
 // Module Reporting
 import RapportHebdo from '@/modules/reporting/RapportHebdo'
 import BonTravail from '@/modules/reporting/BonTravail'
-import TableauFinancier from '@/modules/reporting/TableauFinancier'
 
 // Module Paramètres
 import ParamChantier from '@/modules/parametres/ParamChantier'
@@ -95,7 +94,6 @@ export const router = createBrowserRouter([
       // ── Reporting ───────────────────────────────────────
       { path: 'reporting', element: <RapportHebdo /> },
       { path: 'reporting/bon-travail', element: <BonTravail /> },
-      { path: 'reporting/financier', element: <TableauFinancier /> },
 
       // ── Paramètres ──────────────────────────────────────
       { path: 'parametres', element: <ParamChantier /> },

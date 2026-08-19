@@ -13,9 +13,10 @@ interface ZoneFormData {
   description: string
   superficie: string
   qr_code: string
+  jours_equipe: string
 }
 
-const emptyZoneForm = (): ZoneFormData => ({ name: '', description: '', superficie: '', qr_code: '' })
+const emptyZoneForm = (): ZoneFormData => ({ name: '', description: '', superficie: '', qr_code: '', jours_equipe: '' })
 
 export default function ParamZones() {
   const { chantier } = useAuthStore()
@@ -107,6 +108,7 @@ export default function ParamZones() {
         description: form.description.trim() || undefined,
         superficie: form.superficie ? parseFloat(form.superficie) : undefined,
         qr_code: form.qr_code.trim() || undefined,
+        jours_equipe_prevus: form.jours_equipe ? parseFloat(form.jours_equipe) : null,
         ordre: existingZone?.ordre ?? zones.filter(z => z.secteur_id === secteurId).length + 1
       }
       if (!payload.name) return
@@ -136,7 +138,8 @@ export default function ParamZones() {
       name: zone.name,
       description: zone.description ?? '',
       superficie: zone.superficie?.toString() ?? '',
-      qr_code: zone.qr_code ?? ''
+      qr_code: zone.qr_code ?? '',
+      jours_equipe: zone.jours_equipe_prevus?.toString() ?? ''
     })
   }
 
@@ -275,6 +278,17 @@ export default function ParamZones() {
                                 onChange={e => setEditingZoneForm(p => ({ ...p, superficie: e.target.value }))} />
                             </div>
                           </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs font-semibold text-gray-500 mb-1 block">
+                                Jours/équipe prévus <span className="font-normal text-gray-400">(1 éq. = 2 pers.)</span>
+                              </label>
+                              <input type="number" inputMode="decimal" min="0" step="0.5"
+                                className="input-field text-sm" placeholder="ex: 4"
+                                value={editingZoneForm.jours_equipe}
+                                onChange={e => setEditingZoneForm(p => ({ ...p, jours_equipe: e.target.value }))} />
+                            </div>
+                          </div>
                           <div className="flex gap-2 justify-end">
                             <button onClick={() => setEditingZoneId(null)}
                               className="px-3 py-1.5 text-sm text-gray-500 bg-gray-100 rounded-lg">
@@ -302,6 +316,11 @@ export default function ParamZones() {
                               )}
                               {zone.superficie && (
                                 <span className="text-xs text-gray-400">{zone.superficie} m²</span>
+                              )}
+                              {zone.jours_equipe_prevus != null && (
+                                <span className="text-[10px] font-medium text-nc-blue bg-blue-50 px-1.5 py-0.5 rounded">
+                                  {zone.jours_equipe_prevus} j/éq
+                                </span>
                               )}
                             </div>
                           </div>
@@ -350,6 +369,17 @@ export default function ParamZones() {
                           <input type="number" className="input-field text-sm" placeholder="0"
                             value={newZoneForm.superficie}
                             onChange={e => setNewZoneForm(p => ({ ...p, superficie: e.target.value }))} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 mb-1 block">
+                            Jours/équipe prévus <span className="font-normal text-gray-400">(1 éq. = 2 pers.)</span>
+                          </label>
+                          <input type="number" inputMode="decimal" min="0" step="0.5"
+                            className="input-field text-sm" placeholder="ex: 4"
+                            value={newZoneForm.jours_equipe}
+                            onChange={e => setNewZoneForm(p => ({ ...p, jours_equipe: e.target.value }))} />
                         </div>
                       </div>
                       <div className="flex gap-2 justify-end">

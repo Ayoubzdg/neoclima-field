@@ -39,12 +39,17 @@ export default function ZonesList() {
   const getAvancement = (zoneId: string) =>
     avancements.find(a => a.zone_takt_id === zoneId)
 
+  const totalJoursEquipe = zones.reduce((s, z) => s + (z.jours_equipe_prevus ?? 0), 0)
+
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-bold text-nc-blue">Plans & Zones</h2>
-          <p className="text-gray-500 text-sm">{zones.length} zones · {secteurs.length} secteurs</p>
+          <p className="text-gray-500 text-sm">
+            {zones.length} zones · {secteurs.length} secteurs
+            {totalJoursEquipe > 0 && ` · ${totalJoursEquipe} j/éq prévus`}
+          </p>
         </div>
         <div className="flex gap-2">
           <button
@@ -93,6 +98,11 @@ export default function ZonesList() {
                   <div className="divide-y divide-gray-50 border-t border-gray-100">
                     {secteurZones.map(zone => {
                       const av = getAvancement(zone.id)
+                      // Traçabilité jours/équipe : reste estimé = prévu × (1 − avancement)
+                      const joursPrevus = zone.jours_equipe_prevus
+                      const joursRestants = joursPrevus != null && av
+                        ? Math.max(0, Math.round(joursPrevus * (1 - av.avancement_pct / 100) * 2) / 2)
+                        : null
                       return (
                         <button
                           key={zone.id}
@@ -114,9 +124,22 @@ export default function ZonesList() {
                                 {av ? `${av.avancement_pct}%` : '—'}
                               </span>
                             </div>
-                            {zone.qr_code && (
-                              <p className="text-[10px] text-gray-400 mt-0.5 font-mono">{zone.qr_code}</p>
-                            )}
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {zone.qr_code && (
+                                <span className="text-[10px] text-gray-400 font-mono">{zone.qr_code}</span>
+                              )}
+                              {joursPrevus != null && (
+                                <span className="text-[10px] font-medium text-nc-blue bg-blue-50 px-1.5 py-0.5 rounded">
+                                  {joursPrevus} j/éq
+                                  {joursRestants != null && joursRestants > 0 && (
+                                    <span className="text-gray-400 font-normal"> · reste ~{joursRestants} j</span>
+                                  )}
+                                  {joursRestants === 0 && (
+                                    <span className="text-green-600 font-normal"> · ✓</span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           {av && av.tasks_blocked > 0 && (
                             <span className="text-[10px] bg-red-100 text-red-600 font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">

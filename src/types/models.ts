@@ -88,6 +88,8 @@ export interface ZoneTakt {
   plan_type: string | null
   plan_pages: number
   plan_version: number
+  /** Budget en jours-équipe fixé par le CA (1 équipe = 2 monteurs) */
+  jours_equipe_prevus: number | null
   ordre: number
   created_at: string
   // Relations
