@@ -59,6 +59,7 @@ export default function ZoneTasksView() {
   }, [qrCode, id, filtreEquipe, equipe?.id, semaineCourante])
 
   const handleStatusCycle = async (task: Task) => {
+    if (task.bloquee_par_predecesseur) return // en attente du montage
     const newStatus = nextStatus(task.status, role)
     if (!newStatus) return // done : verrouillé pour le monteur
     await updateStatus(task.id, newStatus, {}, role ?? 'monteur')
@@ -190,7 +191,13 @@ export default function ZoneTasksView() {
                     {task.label}
                   </p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <StatusBadge status={task.status} />
+                    {task.bloquee_par_predecesseur ? (
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-medium">
+                        🔒 En attente montage
+                      </span>
+                    ) : (
+                      <StatusBadge status={task.status} />
+                    )}
                     <span className="text-xs text-gray-400">
                       {task.qte_realisee}/{task.qte_prevue} {task.unite}
                     </span>

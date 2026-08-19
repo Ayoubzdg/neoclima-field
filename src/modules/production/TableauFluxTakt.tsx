@@ -63,7 +63,8 @@ function CycleEditModal({
   const [showTaskForm, setShowTaskForm] = useState(false)
   const [taskForm, setTaskForm] = useState({
     task_type_id: '', label: '', equipe_id: '',
-    qte_prevue: '1', unite: 'pce', heures_prevues: ''
+    qte_prevue: '1', unite: 'pce', heures_prevues: '',
+    tache_precedente_id: ''
   })
   const [taskSaving, setTaskSaving] = useState(false)
   const [taskError, setTaskError] = useState<string | null>(null)
@@ -142,9 +143,12 @@ function CycleEditModal({
         date_planifiee: semaine,
         engage: false,
         cout_unitaire: selectedType?.cout_unitaire ?? 0,
+        // Chaîne montage → isolation
+        lot: selectedType?.lot ?? 'montage',
+        tache_precedente_id: taskForm.tache_precedente_id || null,
       })
       setTasks(prev => [...prev, newTask])
-      setTaskForm({ task_type_id: '', label: '', equipe_id: '', qte_prevue: '1', unite: 'pce', heures_prevues: '' })
+      setTaskForm({ task_type_id: '', label: '', equipe_id: '', qte_prevue: '1', unite: 'pce', heures_prevues: '', tache_precedente_id: '' })
       setShowTaskForm(false)
     } finally {
       setTaskSaving(false)
@@ -412,6 +416,31 @@ function CycleEditModal({
                         {taskForm.qte_prevue} {selectedType.unite} ÷ {selectedType.rendement} {selectedType.unite}/h·mont.
                         = <strong>{taskForm.heures_prevues}h</strong> par monteur
                       </p>
+                    )}
+
+                    {/* ── Chaîne montage → isolation ── */}
+                    {selectedType?.lot === 'isolation' && (
+                      <div>
+                        <label className="text-[9px] font-bold text-amber-600 uppercase tracking-wide">
+                          🔗 Débloquée après (montage)
+                        </label>
+                        <select
+                          value={taskForm.tache_precedente_id}
+                          onChange={e => setTaskForm(f => ({ ...f, tache_precedente_id: e.target.value }))}
+                          className="w-full border border-amber-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none bg-amber-50/40 mt-0.5"
+                        >
+                          <option value="">— Indépendante (pas de lien) —</option>
+                          {tasks.filter(t => t.lot !== 'isolation').map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.label}{t.status === 'done' ? ' ✓' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-amber-600 mt-1">
+                          La tâche restera verrouillée jusqu'à la validation du montage choisi,
+                          puis sera libérée automatiquement.
+                        </p>
+                      </div>
                     )}
 
                     {/* ── Équipe ── */}

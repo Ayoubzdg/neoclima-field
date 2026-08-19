@@ -286,8 +286,21 @@ export default function TacheDetail() {
           )}
         </div>
 
+        {/* ── Tâche isolation en attente du montage ── */}
+        {task.bloquee_par_predecesseur && !isValide && !isAControler && (
+          <div className="p-4 bg-gray-50 border-t border-gray-100 safe-bottom">
+            <div className="flex items-center justify-center gap-2 py-2 text-gray-500 font-semibold">
+              <span className="text-lg">🔒</span>
+              En attente de la validation du montage
+            </div>
+            <p className="text-xs text-gray-400 text-center">
+              Cette tâche se débloquera automatiquement.
+            </p>
+          </div>
+        )}
+
         {/* Actions bas de page — selon l'état du workflow */}
-        {!isValide && !isAControler && (
+        {!task.bloquee_par_predecesseur && !isValide && !isAControler && (
           /* ── Tâche active (à faire / en cours / bloquée) ── */
           <div className="p-4 bg-white border-t border-gray-100 space-y-2 safe-bottom">
             {next && (

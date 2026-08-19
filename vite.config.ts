@@ -38,11 +38,15 @@ export default defineConfig({
             }
           },
           {
+            // NetworkFirst : un plan révisé est TOUJOURS retéléchargé
+            // quand le réseau est là — le cache 7 j ne sert qu'en offline
+            // (avant : CacheFirst servait un plan obsolète pendant 7 jours)
             urlPattern: /.*\.(pdf|png|jpg|jpeg|webp)$/i,
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst',
             options: {
               cacheName: 'plans-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 }
+              expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              networkTimeoutSeconds: 8
             }
           }
         ]

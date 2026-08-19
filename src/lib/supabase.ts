@@ -823,6 +823,15 @@ export async function deleteUtilisateur(id: string): Promise<void> {
 
 // ── PLANS VERSIONS ──────────────────────────────────────────
 
+/** Causes de non-complétion saisies à la clôture hebdo (analyse PPC) */
+export async function saveCausesNonCompletion(
+  rows: { task_id: string; weekly_plan_id: string; cause: string; detail?: string | null }[]
+): Promise<void> {
+  if (rows.length === 0) return
+  const { error } = await supabase.from('causes_non_completion').insert(rows)
+  if (error) handleError(error, 'saveCausesNonCompletion')
+}
+
 export async function getPlanVersions(zoneTaktId: string): Promise<PlanVersion[]> {
   const { data, error } = await supabase
     .from('plans_versions')

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Upload, ZoomIn, ZoomOut, List, AlertTriangle, Loader2 } from 'lucide-react'
-import { getZoneByQrCode, getTasksByZone, uploadPlan, supabase } from '@/lib/supabase'
-import type { ZoneTakt, Task } from '@/types/models'
+import { ArrowLeft, Upload, ZoomIn, ZoomOut, List, AlertTriangle, Loader2, History } from 'lucide-react'
+import { getZoneByQrCode, getTasksByZone, uploadPlan, getPlanVersions, supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/store/authStore'
+import type { ZoneTakt, Task, PlanVersion } from '@/types/models'
 import StatusBadge from '@/components/ui/StatusBadge'
 
 export default function PlanViewer() {
@@ -24,7 +25,10 @@ export default function PlanViewer() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [pdfRenderError, setPdfRenderError] = useState<string | null>(null)
+  const [versions, setVersions] = useState<PlanVersion[]>([])
+  const [showVersions, setShowVersions] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { utilisateur } = useAuthStore()
 
   useEffect(() => {
     setIsLoading(true)
@@ -43,8 +47,9 @@ export default function PlanViewer() {
 
       if (z) {
         setZone(z)
-        const t = await getTasksByZone(z.id)
+        const [t, v] = await Promise.all([getTasksByZone(z.id), getPlanVersions(z.id)])
         setTasks(t)
+        setVersions(v)
       }
     }
     load().finally(() => setIsLoading(false))
@@ -115,16 +120,28 @@ export default function PlanViewer() {
     setUploadError(null)
     try {
       const url = await uploadPlan(file, zone.id)
+      const newVersion = (zone.plan_version ?? 1) + 1
       // Mettre à jour la zone avec l'URL du plan
       const { data: updated } = await supabase
         .from('zones_takt')
-        .update({ plan_url: url, plan_version: (zone.plan_version ?? 1) + 1 })
+        .update({ plan_url: url, plan_version: newVersion })
         .eq('id', zone.id)
         .select()
         .single()
       if (updated) {
         setZone(updated as ZoneTakt)
       }
+      // Tracer la révision (historique consultable — avant : la table
+      // plans_versions existait mais n'était jamais alimentée)
+      const auteurNom = utilisateur
+        ? `${utilisateur.prenom ?? ''} ${utilisateur.nom ?? ''}`.trim()
+        : null
+      const { data: v } = await supabase
+        .from('plans_versions')
+        .insert({ zone_takt_id: zone.id, version: newVersion, url, cree_par: auteurNom })
+        .select()
+        .single()
+      if (v) setVersions(prev => [v as PlanVersion, ...prev])
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Erreur upload')
     } finally {
@@ -159,7 +176,14 @@ export default function PlanViewer() {
         </button>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-sm truncate">{zone.name}</p>
-          <p className="text-white/60 text-xs">{zone.qr_code} · Version {zone.plan_version}</p>
+          <p className="text-white/60 text-xs flex items-center gap-1.5">
+            {zone.qr_code}
+            {zone.plan_url && (
+              <span className="bg-amber-400 text-nc-blue font-bold px-1.5 py-0.5 rounded text-[11px]">
+                Rév. {zone.plan_version}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-1">
           <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} disabled={isPdfLoading} className="p-1.5 rounded-xl hover:bg-white/10 disabled:opacity-40">
@@ -177,6 +201,16 @@ export default function PlanViewer() {
           >
             <List size={18} />
           </button>
+          {/* Historique des révisions */}
+          {versions.length > 0 && (
+            <button
+              onClick={() => setShowVersions(v => !v)}
+              className={`p-1.5 rounded-xl transition-colors ${showVersions ? 'bg-white/20' : 'hover:bg-white/10'}`}
+              title="Historique des révisions"
+            >
+              <History size={18} />
+            </button>
+          )}
           {/* Bouton upload plan */}
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -201,6 +235,29 @@ export default function PlanViewer() {
           <AlertTriangle size={14} />
           {uploadError}
           <button onClick={() => setUploadError(null)} className="ml-auto font-bold">×</button>
+        </div>
+      )}
+      {/* Historique des révisions */}
+      {showVersions && versions.length > 0 && (
+        <div className="bg-white border-b border-gray-100 px-4 py-2 max-h-40 overflow-y-auto">
+          <p className="text-xs font-semibold text-gray-500 mb-1.5">Historique des révisions</p>
+          <div className="space-y-1">
+            {versions.map(v => (
+              <div key={v.id} className="flex items-center gap-2 text-xs">
+                <span className={`font-bold px-1.5 py-0.5 rounded
+                  ${v.version === zone.plan_version ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                  Rév. {v.version}
+                </span>
+                <span className="text-gray-500">
+                  {new Date(v.created_at).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                </span>
+                {v.cree_par && <span className="text-gray-400">par {v.cree_par}</span>}
+                {v.version === zone.plan_version
+                  ? <span className="text-green-600 font-medium">· en vigueur</span>
+                  : <a href={v.url} target="_blank" rel="noopener noreferrer" className="text-nc-blue underline">voir</a>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {/* Erreur rendu PDF */}

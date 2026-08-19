@@ -3,7 +3,7 @@ import type { CycleTakt, WeeklyPlan, Contrainte, ZoneTakt, Secteur } from '@/typ
 import {
   getCyclesBySemaine, getWeeklyPlan, upsertWeeklyPlan,
   getContraintesUrgentes, getZonesByChantier, getSecteurs,
-  upsertCycle
+  upsertCycle, saveCausesNonCompletion
 } from '@/lib/supabase'
 import { getMonday, addWeeks, formatDateISO } from '@/utils/dates'
 
@@ -21,7 +21,12 @@ interface PlanningState {
   loadLookahead: (chantierId: string, semaineDebut: string) => Promise<void>
   setSemaine: (semaine: string) => void
   engagerTache: (taskId: string, engaged: boolean) => void
-  cloturerSemaine: (chantierId: string, semaine: string) => Promise<void>
+  cloturerSemaine: (
+    chantierId: string,
+    semaine: string,
+    ppcGlobal?: number | null,
+    causes?: { task_id: string; cause: string }[]
+  ) => Promise<void>
   decloturerSemaine: (chantierId: string, semaine: string) => Promise<void>
   upsertCycleLocal: (cycle: Partial<CycleTakt>) => Promise<void>
 }
@@ -77,13 +82,22 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     // Mis à jour optimiste — géré dans productionStore
   },
 
-  cloturerSemaine: async (chantierId: string, semaine: string) => {
+  cloturerSemaine: async (chantierId, semaine, ppcGlobal = null, causes = []) => {
     try {
+      // Le PPC est enfin ÉCRIT à la clôture (avant : le texte UI le
+      // promettait mais ppc_global n'était jamais renseigné)
       const plan = await upsertWeeklyPlan({
         chantier_id: chantierId,
         semaine,
-        statut: 'cloture'
+        statut: 'cloture',
+        ppc_global: ppcGlobal
       })
+      // Causes de non-complétion (analyse PPC — 1 tap par tâche)
+      if (plan?.id && causes.length > 0) {
+        await saveCausesNonCompletion(
+          causes.map(c => ({ task_id: c.task_id, weekly_plan_id: plan.id, cause: c.cause }))
+        )
+      }
       set({ weeklyPlan: plan })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erreur clôture semaine'

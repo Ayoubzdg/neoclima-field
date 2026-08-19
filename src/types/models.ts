@@ -136,6 +136,8 @@ export interface TaskType {
   phases: string[]
   rendement: number | null
   cout_unitaire: number
+  /** Lot métier — montage (défaut) ou isolation */
+  lot?: 'montage' | 'isolation'
 }
 
 // ── Cycle Takt ──────────────────────────────────────────────
@@ -172,6 +174,12 @@ export interface Task {
   equipe_id: string | null
   /** Héritée de l'équipe via trigger DB (cloisonnement sous-traitants) */
   entreprise_id: string | null
+  /** Lot métier — montage (défaut) ou isolation */
+  lot: 'montage' | 'isolation'
+  /** Tâche montage dont dépend cette tâche (chaîne montage → isolation) */
+  tache_precedente_id: string | null
+  /** true tant que le prédécesseur n'est pas validé (maintenu par trigger DB) */
+  bloquee_par_predecesseur: boolean
   label: string
   description: string | null
   qte_prevue: number

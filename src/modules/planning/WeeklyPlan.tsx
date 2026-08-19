@@ -5,9 +5,18 @@ import { useAuthStore } from '@/store/authStore'
 import { getSemaineLabel } from '@/utils/dates'
 import { calculerPPC } from '@/utils/ppc'
 import { updateTask } from '@/lib/supabase'
-import { CheckSquare, Square, Lock, LockOpen, ChevronLeft, ChevronRight, Users } from 'lucide-react'
+import { CheckSquare, Square, Lock, LockOpen, ChevronLeft, ChevronRight, Users, X } from 'lucide-react'
 import ProgressBar from '@/components/ui/ProgressBar'
 import StatusBadge from '@/components/ui/StatusBadge'
+import type { Task } from '@/types/models'
+
+/** Causes de non-complétion (schéma DB causes_non_completion) */
+const CAUSES: { id: string; label: string; emoji: string }[] = [
+  { id: 'contrainte_non_levee',    label: 'Contrainte non levée',   emoji: '🚫' },
+  { id: 'ressource_insuffisante',  label: 'Manque de ressources',   emoji: '👷' },
+  { id: 'plan_non_disponible',     label: 'Plan non disponible',    emoji: '📄' },
+  { id: 'autre',                   label: 'Autre',                  emoji: '❓' },
+]
 
 export default function WeeklyPlan() {
   const { chantier } = useAuthStore()
@@ -15,6 +24,8 @@ export default function WeeklyPlan() {
   const { allTasks, loadAllTasks, updateTaskLocal } = useProductionStore()
   const [isClosing, setIsClosing] = useState(false)
   const [isOpening, setIsOpening] = useState(false)
+  const [showCauses, setShowCauses] = useState(false)
+  const [causesChoisies, setCausesChoisies] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!chantier?.id) return
@@ -35,11 +46,32 @@ export default function WeeklyPlan() {
     }
   }
 
+  // Tâches engagées non complétées → causes à documenter
+  const tasksNonCompletees = tasksEngagees.filter(t => t.status !== 'done')
+
   const handleCloturer = async () => {
     if (!chantier?.id) return
+    if (tasksNonCompletees.length > 0) {
+      // Documenter les causes avant de clôturer (1 tap par tâche)
+      setCausesChoisies({})
+      setShowCauses(true)
+      return
+    }
     setIsClosing(true)
-    await cloturerSemaine(chantier.id, semaineCourante)
+    await cloturerSemaine(chantier.id, semaineCourante, ppc)
     setIsClosing(false)
+  }
+
+  const handleConfirmerCloture = async () => {
+    if (!chantier?.id) return
+    setIsClosing(true)
+    const causes = tasksNonCompletees.map(t => ({
+      task_id: t.id,
+      cause: causesChoisies[t.id] ?? 'autre',
+    }))
+    await cloturerSemaine(chantier.id, semaineCourante, ppc, causes)
+    setIsClosing(false)
+    setShowCauses(false)
   }
 
   const handleDecloture = async () => {
@@ -199,6 +231,61 @@ export default function WeeklyPlan() {
           <p className="text-xs text-gray-400 text-center mt-2">
             Permet de modifier les tâches engagées avant recalcul du PPC
           </p>
+        </div>
+      )}
+
+      {/* ── Modal causes de non-complétion ── */}
+      {showCauses && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end animate-fade-in">
+          <div className="w-full bg-white rounded-t-3xl animate-slide-up max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-nc-blue">Pourquoi ces tâches n'ont pas abouti ?</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {tasksNonCompletees.length} tâche{tasksNonCompletees.length > 1 ? 's' : ''} engagée{tasksNonCompletees.length > 1 ? 's' : ''} non validée{tasksNonCompletees.length > 1 ? 's' : ''} — 1 tap par tâche
+                </p>
+              </div>
+              <button onClick={() => setShowCauses(false)} className="p-2 rounded-xl hover:bg-gray-100">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {tasksNonCompletees.map((task: Task) => (
+                <div key={task.id} className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-sm font-medium text-nc-blue mb-2 truncate">{task.label}</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {CAUSES.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => setCausesChoisies(prev => ({ ...prev, [task.id]: c.id }))}
+                        className={`p-2 rounded-lg border-2 text-left text-xs font-medium transition-all active:scale-95 touch-manipulation
+                          ${causesChoisies[task.id] === c.id
+                            ? 'border-nc-blue bg-blue-50 text-nc-blue'
+                            : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200'}`}
+                      >
+                        {c.emoji} {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <button
+                onClick={handleConfirmerCloture}
+                disabled={isClosing || tasksNonCompletees.some(t => !causesChoisies[t.id])}
+                className="w-full btn-primary flex items-center justify-center gap-2 h-12 disabled:opacity-40"
+              >
+                <Lock size={18} />
+                {isClosing ? 'Clôture…' : `Clôturer la semaine (PPC ${ppc ?? '—'}%)`}
+              </button>
+              {tasksNonCompletees.some(t => !causesChoisies[t.id]) && (
+                <p className="text-xs text-gray-400 text-center">
+                  Choisis une cause pour chaque tâche avant de clôturer
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

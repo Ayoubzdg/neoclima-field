@@ -102,6 +102,7 @@ export default function MesTaches() {
     : 0
 
   const handleStatusCycle = async (task: Task) => {
+    if (task.bloquee_par_predecesseur) return // en attente du montage
     const next = nextStatus(task.status, role)
     if (!next) return // done : verrouillé pour le monteur
     const updates: Partial<Task> = {}
@@ -330,6 +331,35 @@ function InlineTaskCard({
   }
 
   const deadline = !isTermine(task.status) ? getDeadlineInfo(task.date_planifiee) : null
+  const verrouillee = task.bloquee_par_predecesseur && !isTermine(task.status)
+
+  // ── Tâche isolation en attente du montage : carte verrouillée ──
+  if (verrouillee) {
+    return (
+      <div className="rounded-2xl border-2 border-gray-100 bg-gray-50/70 shadow-sm overflow-hidden opacity-80">
+        <div className="flex items-center gap-3 px-3 py-3">
+          <span className="text-xl flex-shrink-0">🔒</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm leading-tight text-gray-500">{task.label}</p>
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-md font-medium">
+                En attente du montage
+              </span>
+              {task.zone_takt?.name && (
+                <span className="text-xs text-gray-400">📍 {task.zone_takt.name}</span>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">
+              Se débloquera automatiquement quand le montage sera validé
+            </p>
+          </div>
+          <button onClick={onDetail} className="flex-shrink-0 p-1.5 rounded-lg hover:bg-gray-100">
+            <ChevronRight size={16} className="text-gray-300" />
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={`rounded-2xl border-2 shadow-sm overflow-hidden ${statusColors[task.status] ?? 'border-gray-100 bg-white'}`}>
