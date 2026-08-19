@@ -329,6 +329,32 @@ export interface TaskHistory {
   created_at: string
 }
 
+// ── Travaux supplémentaires ─────────────────────────────────
+
+export type TravauxSuppStatut = 'signale' | 'valide_cc' | 'valide_ca' | 'realise' | 'refuse'
+
+export interface TravauxSupp {
+  id: string
+  chantier_id: string
+  zone_takt_id: string | null
+  entreprise_id: string | null
+  task_id: string | null
+  description: string
+  photo_url: string | null
+  statut: TravauxSuppStatut
+  heures_estimees: number | null
+  qte_estimee: string | null
+  cree_par: string | null
+  cree_par_role: string | null
+  valide_cc_par: string | null
+  valide_ca_par: string | null
+  motif_refus: string | null
+  created_at: string
+  updated_at: string
+  // Relations
+  zone_takt?: ZoneTakt
+}
+
 // ── Effectif ────────────────────────────────────────────────
 
 export interface Effectif {

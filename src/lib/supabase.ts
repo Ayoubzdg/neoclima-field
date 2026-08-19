@@ -4,7 +4,7 @@ import type {
   Contrainte, NonConformite, Mesure, Photo, TaskHistory,
   Effectif, Equipe, Utilisateur, WeeklyPlan, TaskType,
   PlanVersion, Materiau, VueAvancementZone,
-  Entreprise, Personne, AccesChantier, LoginPersonneResult
+  Entreprise, Personne, AccesChantier, LoginPersonneResult, TravauxSupp
 } from '@/types/models'
 
 // ── Client Supabase ─────────────────────────────────────────
@@ -822,6 +822,39 @@ export async function deleteUtilisateur(id: string): Promise<void> {
 }
 
 // ── PLANS VERSIONS ──────────────────────────────────────────
+
+// ── TRAVAUX SUPPLÉMENTAIRES ─────────────────────────────────
+
+export async function getTravauxSupp(chantierId: string): Promise<TravauxSupp[]> {
+  const { data, error } = await supabase
+    .from('travaux_supp')
+    .select('*, zone_takt:zones_takt(*)')
+    .eq('chantier_id', chantierId)
+    .order('created_at', { ascending: false })
+  if (error) handleError(error, 'getTravauxSupp')
+  return (data ?? []) as TravauxSupp[]
+}
+
+export async function createTravauxSupp(ts: Partial<TravauxSupp>): Promise<TravauxSupp> {
+  const { data, error } = await supabase
+    .from('travaux_supp')
+    .insert(ts)
+    .select('*, zone_takt:zones_takt(*)')
+    .single()
+  if (error) handleError(error, 'createTravauxSupp')
+  return data as TravauxSupp
+}
+
+export async function updateTravauxSupp(id: string, updates: Partial<TravauxSupp>): Promise<TravauxSupp> {
+  const { data, error } = await supabase
+    .from('travaux_supp')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*, zone_takt:zones_takt(*)')
+    .single()
+  if (error) handleError(error, 'updateTravauxSupp')
+  return data as TravauxSupp
+}
 
 /** Causes de non-complétion saisies à la clôture hebdo (analyse PPC) */
 export async function saveCausesNonCompletion(

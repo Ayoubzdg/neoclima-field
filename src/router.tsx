@@ -16,6 +16,7 @@ import TacheDetail from '@/modules/production/TacheDetail'
 import QRScanner from '@/modules/production/QRScanner'
 import DashboardChef from '@/modules/production/DashboardChef'
 import ControleTaches from '@/modules/production/ControleTaches'
+import TravauxSuppList from '@/modules/production/TravauxSuppList'
 import TableauFluxTakt from '@/modules/production/TableauFluxTakt'
 import BlocagesUrgents from '@/modules/production/BlocagesUrgents'
 import ZoneTasksView from '@/modules/production/ZoneTasksView'
@@ -43,6 +44,7 @@ import Effectifs from '@/modules/equipes/Effectifs'
 
 // Module Reporting
 import RapportHebdo from '@/modules/reporting/RapportHebdo'
+import RapportJour from '@/modules/reporting/RapportJour'
 import BonTravail from '@/modules/reporting/BonTravail'
 
 // Module Paramètres
@@ -75,6 +77,7 @@ export const router = createBrowserRouter([
       { path: 'production/scan', element: <QRScanner /> },
       { path: 'production/chef', element: guard(['chef_equipe', 'chef', 'ca', 'admin'], <DashboardChef />) },
       { path: 'production/controle', element: guard(['chef', 'ca', 'admin'], <ControleTaches />) },
+      { path: 'production/travaux-supp', element: guard(['monteur', 'chef_equipe', 'chef', 'ca', 'admin'], <TravauxSuppList />) },
       { path: 'production/takt', element: guard(['chef', 'ca', 'admin'], <TableauFluxTakt />) },
       { path: 'production/blocages', element: guard(['chef_equipe', 'chef', 'ca', 'admin'], <BlocagesUrgents />) },
 
@@ -102,6 +105,7 @@ export const router = createBrowserRouter([
 
       // ── Reporting ───────────────────────────────────────
       { path: 'reporting', element: guard(['ca', 'admin'], <RapportHebdo />) },
+      { path: 'reporting/jour', element: guard(['chef', 'ca', 'admin'], <RapportJour />) },
       { path: 'reporting/bon-travail', element: guard(['chef', 'ca', 'admin'], <BonTravail />) },
 
       // ── Paramètres ──────────────────────────────────────

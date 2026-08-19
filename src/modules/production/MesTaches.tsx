@@ -8,6 +8,7 @@ import { nextStatus, isTermine, PRIORITY_ORDER, STATUS_LABELS } from '@/utils/st
 import ProgressBar from '@/components/ui/ProgressBar'
 import BlocageForm from './BlocageForm'
 import FinJourneeWizard from './FinJourneeWizard'
+import TravauxSuppForm from './TravauxSuppForm'
 import type { Task, ContrainteType } from '@/types/models'
 
 // ── Utilitaires deadline ────────────────────────────────────
@@ -78,6 +79,7 @@ export default function MesTaches() {
 
   const [blocageTask, setBlocageTask] = useState<Task | null>(null)
   const [showWizard, setShowWizard] = useState(false)
+  const [showTravauxSupp, setShowTravauxSupp] = useState(false)
 
   useEffect(() => {
     if (equipe?.id) {
@@ -261,15 +263,24 @@ export default function MesTaches() {
         </button>
       )}
 
-      {/* Bouton scan QR — secondaire, discret */}
-      <button
-        onClick={() => navigate('/production/scan')}
-        className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl
-                   border border-gray-200 text-gray-400 text-xs hover:bg-gray-50 transition-colors"
-      >
-        <QrCode size={14} />
-        Scanner une zone
-      </button>
+      {/* Boutons secondaires */}
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={() => setShowTravauxSupp(true)}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
+                     border border-amber-200 text-amber-600 text-xs font-medium hover:bg-amber-50 transition-colors"
+        >
+          ⚡ Travail non prévu
+        </button>
+        <button
+          onClick={() => navigate('/production/scan')}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
+                     border border-gray-200 text-gray-400 text-xs hover:bg-gray-50 transition-colors"
+        >
+          <QrCode size={14} />
+          Scanner une zone
+        </button>
+      </div>
 
       {/* Blocage form */}
       {blocageTask && (
@@ -277,6 +288,14 @@ export default function MesTaches() {
           task={blocageTask}
           onClose={() => setBlocageTask(null)}
           onSubmit={handleBlocageSubmit}
+        />
+      )}
+
+      {/* Travail non prévu */}
+      {showTravauxSupp && (
+        <TravauxSuppForm
+          onClose={() => setShowTravauxSupp(false)}
+          onCreated={() => { /* signalé — le chef le verra dans sa file */ }}
         />
       )}
 

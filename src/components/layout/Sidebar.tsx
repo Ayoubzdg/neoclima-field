@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   ClipboardList, Map, BarChart2, Shield, Settings,
   Users, BarChart3, HardHat, LogOut, QrCode, Calendar, Building2,
-  ShieldCheck
+  ShieldCheck, AlertTriangle
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
@@ -20,6 +20,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/production/controle',   icon: <ShieldCheck size={18} />,   label: 'Contrôle travaux', roles: ['chef', 'ca', 'admin'] },
       { to: '/production/takt',       icon: <BarChart2 size={18} />,     label: 'Tableau de flux', roles: ['chef', 'ca', 'admin'] },
       { to: '/production/blocages',   icon: <Shield size={18} />,        label: 'Blocages urgents',roles: ['chef_equipe', 'chef', 'ca', 'admin'] },
+      { to: '/production/travaux-supp', icon: <AlertTriangle size={18} />, label: 'Travaux supp.',  roles: ['chef_equipe', 'chef', 'ca', 'admin'] },
       { to: '/production/scan',       icon: <QrCode size={18} />,        label: 'Scanner QR',      roles: ['monteur', 'chef_equipe', 'chef', 'ca', 'admin'] },
     ]
   },
@@ -57,6 +58,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Reporting',
     items: [
+      { to: '/reporting/jour',          icon: <Calendar size={18} />,     label: 'Rapport du jour',  roles: ['chef', 'ca', 'admin'] },
       { to: '/reporting',               icon: <BarChart3 size={18} />,    label: 'Rapport hebdo',    roles: ['ca', 'admin'] },
       { to: '/reporting/bon-travail',   icon: <ClipboardList size={18} />,label: 'Bon de travail',   roles: ['chef', 'ca', 'admin'] },
     ]
