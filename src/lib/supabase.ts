@@ -650,11 +650,36 @@ export async function getPhotosByTask(taskId: string): Promise<Photo[]> {
 
 // ── TASK HISTORY ────────────────────────────────────────────
 
-export async function addTaskHistory(taskId: string, role: string, action: string, detail?: string): Promise<void> {
+export async function addTaskHistory(
+  taskId: string,
+  role: string,
+  action: string,
+  detail?: string,
+  personneNom?: string | null,
+  entrepriseId?: string | null
+): Promise<void> {
   const { error } = await supabase
     .from('task_history')
-    .insert({ task_id: taskId, role, action, detail })
+    .insert({
+      task_id: taskId,
+      role,
+      action,
+      detail,
+      personne_nom: personneNom ?? null,
+      entreprise_id: entrepriseId ?? null,
+    })
   if (error) handleError(error, 'addTaskHistory')
+}
+
+export async function getTaskHistory(taskId: string): Promise<TaskHistory[]> {
+  const { data, error } = await supabase
+    .from('task_history')
+    .select('*')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) return []
+  return (data ?? []) as TaskHistory[]
 }
 
 // ── ÉQUIPES ─────────────────────────────────────────────────

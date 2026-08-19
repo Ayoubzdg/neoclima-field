@@ -9,7 +9,6 @@ import ProgressBar from '@/components/ui/ProgressBar'
 import BlocageForm from './BlocageForm'
 import FinJourneeWizard from './FinJourneeWizard'
 import type { Task, ContrainteType } from '@/types/models'
-import { upsertContrainte } from '@/lib/supabase'
 
 // ── Utilitaires deadline ────────────────────────────────────
 
@@ -73,7 +72,7 @@ function sortByPriority(tasks: Task[]): Task[] {
 export default function MesTaches() {
   const navigate = useNavigate()
   const { equipe, role, utilisateur } = useAuthStore()
-  const { tasksDuJour, isLoading, error, loadTasksDuJour, updateStatus, updateQty } = useProductionStore()
+  const { tasksDuJour, isLoading, error, loadTasksDuJour, updateStatus, updateQty, signalerBlocage } = useProductionStore()
   const today = todayISO()
   const monday = currentMondayISO()
 
@@ -123,15 +122,8 @@ export default function MesTaches() {
 
   const handleBlocageSubmit = async (type: ContrainteType, comment: string) => {
     if (!blocageTask) return
-    await updateStatus(blocageTask.id, 'blocked', { type_blocage: type, comment }, role ?? 'monteur')
-    await upsertContrainte({
-      task_id: blocageTask.id,
-      cycle_id: blocageTask.cycle_id ?? undefined,
-      type,
-      description: comment || type,
-      bloquant: true,
-      statut: 'ouverte',
-    })
+    // Point d'entrée unifié : statut + contrainte + historique
+    await signalerBlocage(blocageTask, type, comment, role ?? 'monteur')
     setBlocageTask(null)
   }
 

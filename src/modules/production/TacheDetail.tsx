@@ -6,9 +6,11 @@ import {
 } from 'lucide-react'
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
-import { getTaskById, preparePhoto, uploadPhotoBlob, savePhoto, getPhotosByTask } from '@/lib/supabase'
+import { getTaskById, preparePhoto, uploadPhotoBlob, savePhoto, getPhotosByTask, getTaskHistory } from '@/lib/supabase'
 import { addPhotoOffline } from '@/lib/offline/db'
 import { useUiStore } from '@/store/uiStore'
+import { History } from 'lucide-react'
+import type { TaskHistory } from '@/types/models'
 import StatusBadge from '@/components/ui/StatusBadge'
 import ProgressBar from '@/components/ui/ProgressBar'
 import BlocageForm from './BlocageForm'
@@ -19,10 +21,11 @@ export default function TacheDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { role } = useAuthStore()
-  const { updateStatus } = useProductionStore()
+  const { updateStatus, signalerBlocage } = useProductionStore()
 
   const [task, setTask] = useState<Task | null>(null)
   const [photos, setPhotos] = useState<Photo[]>([])
+  const [history, setHistory] = useState<TaskHistory[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
@@ -34,10 +37,11 @@ export default function TacheDetail() {
   useEffect(() => {
     if (!id) return
     setIsLoading(true)
-    Promise.all([getTaskById(id), getPhotosByTask(id)])
-      .then(([t, p]) => {
+    Promise.all([getTaskById(id), getPhotosByTask(id), getTaskHistory(id)])
+      .then(([t, p, h]) => {
         setTask(t)
         setPhotos(p)
+        setHistory(h)
         if (t) setQteRealisee(String(t.qte_realisee))
       })
       .finally(() => setIsLoading(false))
@@ -247,6 +251,39 @@ export default function TacheDetail() {
               </div>
             </div>
           )}
+
+          {/* Historique — qui a fait quoi, quand */}
+          {history.length > 0 && (
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+              <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <History size={14} />
+                Historique
+              </p>
+              <div className="space-y-2.5">
+                {history.map(h => {
+                  const d = new Date(h.created_at)
+                  const when = d.toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit' })
+                    + ' ' + d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })
+                  const actionLabel =
+                    h.action === 'blocage'   ? '🚫 Blocage' :
+                    h.action === 'deblocage' ? '🔓 Déblocage' :
+                    h.action === 'status_change' ? 'Statut' : h.action
+                  return (
+                    <div key={h.id} className="flex items-start gap-2 text-xs">
+                      <span className="text-gray-400 font-mono flex-shrink-0 w-20">{when}</span>
+                      <div className="min-w-0">
+                        <span className="text-gray-700 font-medium">{actionLabel}</span>
+                        {h.detail && <span className="text-gray-500"> {h.detail}</span>}
+                        <span className="text-gray-400">
+                          {' — '}{h.personne_nom || h.role || '?'}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Actions bas de page — selon l'état du workflow */}
@@ -390,7 +427,10 @@ export default function TacheDetail() {
           task={task}
           onClose={() => setShowBlocage(false)}
           onSubmit={async (type, comment) => {
-            await updateStatus(task.id, 'blocked', { type_blocage: type, comment }, role ?? 'monteur')
+            // Point d'entrée unifié : statut + contrainte + historique
+            // (avant : ce chemin ne créait PAS la contrainte, contrairement
+            //  à MesTaches — incohérence relevée par l'audit)
+            await signalerBlocage(task, type, comment, role ?? 'monteur')
             setTask(prev => prev ? { ...prev, status: 'blocked', type_blocage: type, comment } : prev)
             setShowBlocage(false)
           }}

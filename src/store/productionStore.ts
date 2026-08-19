@@ -1,11 +1,19 @@
 import { create } from 'zustand'
-import type { Task, Equipe, Effectif, TaskStatus } from '@/types/models'
+import type { Task, Equipe, Effectif, TaskStatus, ContrainteType } from '@/types/models'
 import {
   getTasksDuJour, getTasksByChantier, getEquipes, getEffectifs,
-  updateTaskStatusSafe, incrementQteRealisee, addTaskHistory
+  updateTaskStatusSafe, incrementQteRealisee, addTaskHistory, upsertContrainte, supabase
 } from '@/lib/supabase'
 import { addToSyncQueue, updateTaskOffline, getTasksOffline, cacheDonneesTerrain } from '@/lib/offline/db'
 import { useUiStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
+
+/** Identité de session pour la traçabilité (qui + quelle entreprise) */
+function auteur() {
+  const a = useAuthStore.getState()
+  const nom = a.utilisateur ? `${a.utilisateur.prenom ?? ''} ${a.utilisateur.nom ?? ''}`.trim() : null
+  return { nom: nom || null, entrepriseId: a.entrepriseId ?? null }
+}
 
 interface ProductionState {
   // Data
@@ -28,6 +36,10 @@ interface ProductionState {
   updateStatus: (taskId: string, status: TaskStatus, updates?: Partial<Task>, userRole?: string) => Promise<void>
   /** Quantité en delta atomique — deux saisies simultanées s'additionnent */
   updateQty: (taskId: string, delta: number, userRole?: string) => Promise<void>
+  /** Point d'entrée UNIQUE du signalement de blocage : statut + contrainte + historique */
+  signalerBlocage: (task: Task, type: ContrainteType, comment: string, userRole?: string) => Promise<void>
+  /** Levée de blocage : statut + contrainte liée + historique avec durée */
+  leverBlocage: (task: Task, userRole?: string) => Promise<void>
   setOnline: (online: boolean) => void
   updateTaskLocal: (taskId: string, updates: Partial<Task>) => void
 }
@@ -130,7 +142,8 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
           return
         }
         if (task) get().updateTaskLocal(taskId, task)
-        await addTaskHistory(taskId, userRole, 'status_change', `→ ${status}`)
+        const { nom, entrepriseId } = auteur()
+        await addTaskHistory(taskId, userRole, 'status_change', `→ ${status}`, nom, entrepriseId)
       } catch {
         // Erreur réseau → sync queue
         await addToSyncQueue({
@@ -195,6 +208,56 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
     } else {
       await queueDelta()
     }
+  },
+
+  signalerBlocage: async (task: Task, type: ContrainteType, comment: string, userRole = 'monteur') => {
+    // 1. Statut + cause sur la tâche
+    await get().updateStatus(task.id, 'blocked', { type_blocage: type, comment }, userRole)
+    // 2. Contrainte liée (alimente Lookahead + agenda contraintes)
+    try {
+      await upsertContrainte({
+        task_id: task.id,
+        cycle_id: task.cycle_id ?? undefined,
+        type,
+        description: comment || type,
+        bloquant: true,
+        statut: 'ouverte',
+      })
+    } catch { /* la tâche reste bloquée même si la contrainte échoue */ }
+    // 3. Historique : cause + commentaire (la donnée qui nourrit
+    //    le KPI "durée moyenne de blocage" et l'analyse des causes)
+    const { nom, entrepriseId } = auteur()
+    try {
+      await addTaskHistory(task.id, userRole, 'blocage', `${type}${comment ? ` — ${comment}` : ''}`, nom, entrepriseId)
+    } catch { /* non bloquant */ }
+  },
+
+  leverBlocage: async (task: Task, userRole = 'chef') => {
+    const cause = task.type_blocage
+    const bloqueDepuis = task.updated_at
+    // 1. Retour en cours (efface la cause sur la tâche)
+    await get().updateStatus(task.id, 'en_cours', { type_blocage: null, comment: null }, userRole)
+    // 2. Lever la contrainte liée (avant : elle restait "ouverte"
+    //    pour toujours et polluait le Lookahead)
+    try {
+      await supabase
+        .from('contraintes')
+        .update({ statut: 'levee', date_levee_reel: new Date().toISOString().split('T')[0] })
+        .eq('task_id', task.id)
+        .neq('statut', 'levee')
+    } catch { /* non bloquant */ }
+    // 3. Historique avec la durée du blocage
+    const heures = bloqueDepuis
+      ? Math.round((Date.now() - new Date(bloqueDepuis).getTime()) / 3_600_000)
+      : null
+    const { nom, entrepriseId } = auteur()
+    try {
+      await addTaskHistory(
+        task.id, userRole, 'deblocage',
+        `${cause ?? 'blocage'} levé${heures != null ? ` après ~${heures} h` : ''}`,
+        nom, entrepriseId
+      )
+    } catch { /* non bloquant */ }
   },
 
   setOnline: (online: boolean) => set({ isOnline: online }),

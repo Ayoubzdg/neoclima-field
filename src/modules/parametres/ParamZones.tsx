@@ -5,6 +5,7 @@ import {
   getSecteurs, upsertSecteur, deleteSecteur,
   getZonesTakt, upsertZoneTakt, deleteZoneTakt
 } from '@/lib/supabase'
+import { generateShortCode } from '@/utils/qr'
 import type { Secteur, ZoneTakt } from '@/types/models'
 
 // ── Formulaire zone ──────────────────────────────────────────
@@ -396,7 +397,11 @@ export default function ParamZones() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => { setAddingZoneInSecteur(secteur.id); setNewZoneForm(emptyZoneForm()) }}
+                      onClick={() => {
+                        // QR pré-généré : fin de la saisie manuelle (et des collisions)
+                        setAddingZoneInSecteur(secteur.id)
+                        setNewZoneForm({ ...emptyZoneForm(), qr_code: generateShortCode() })
+                      }}
                       className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-400
                                  hover:text-nc-blue hover:bg-blue-50/30 transition-colors border-t border-gray-50"
                     >

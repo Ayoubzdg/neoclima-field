@@ -9,13 +9,24 @@ interface Props {
 }
 
 const BLOCAGE_TYPES: { id: ContrainteType; label: string; emoji: string }[] = [
-  { id: 'materiau', label: 'Matériau manquant', emoji: '📦' },
-  { id: 'acces', label: 'Accès impossible', emoji: '🚧' },
-  { id: 'autre_corps', label: 'Autre corps métier', emoji: '🔧' },
-  { id: 'gros_oeuvre', label: 'Gros œuvre', emoji: '🏗️' },
-  { id: 'equipement', label: 'Équipement manquant', emoji: '⚙️' },
-  { id: 'autre', label: 'Autre', emoji: '❓' },
+  { id: 'materiau',      label: 'Matériau manquant',    emoji: '📦' },
+  { id: 'acces',         label: 'Accès impossible',     emoji: '🚧' },
+  { id: 'autre_corps',   label: 'Autre corps métier',   emoji: '🔧' },
+  { id: 'plan_manquant', label: 'Plan manquant',        emoji: '📄' },
+  { id: 'erreur_plan',   label: 'Erreur de plan',       emoji: '✏️' },
+  { id: 'reservation',   label: 'Réservation manquante',emoji: '🕳️' },
+  { id: 'validation',    label: 'Validation nécessaire',emoji: '✅' },
+  { id: 'securite',      label: 'Problème sécurité',    emoji: '🦺' },
+  { id: 'technique',     label: 'Problème technique',   emoji: '🔩' },
+  { id: 'gros_oeuvre',   label: 'Gros œuvre',           emoji: '🏗️' },
+  { id: 'equipement',    label: 'Équipement manquant',  emoji: '⚙️' },
+  { id: 'autre',         label: 'Autre',                emoji: '❓' },
 ]
+
+/** Libellés partagés (BlocagesUrgents, historique, rapports) */
+export const BLOCAGE_LABELS: Record<string, string> = Object.fromEntries(
+  BLOCAGE_TYPES.map(t => [t.id, `${t.emoji} ${t.label}`])
+)
 
 export default function BlocageForm({ task, onClose, onSubmit }: Props) {
   const [selectedType, setSelectedType] = useState<ContrainteType | null>(null)

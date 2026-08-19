@@ -15,7 +15,10 @@ export type ChantierStatut = 'actif' | 'termine' | 'archive'
 export type TaskStatus = 'todo' | 'en_cours' | 'a_controler' | 'done' | 'blocked'
 export type PhaseStatus = 'todo' | 'en_cours' | 'done'
 export type CycleStatut = 'planifie' | 'en_cours' | 'complete' | 'partiel'
-export type ContrainteType = 'materiau' | 'acces' | 'gros_oeuvre' | 'autre_corps' | 'equipement' | 'autre'
+export type ContrainteType =
+  | 'materiau' | 'acces' | 'gros_oeuvre' | 'autre_corps' | 'equipement'
+  | 'plan_manquant' | 'erreur_plan' | 'validation' | 'reservation'
+  | 'securite' | 'technique' | 'autre'
 export type ContrainteStatut = 'ouverte' | 'en_cours' | 'levee'
 export type MateriauxStatut = 'manquant' | 'commande' | 'livre'
 export type NcGravite = 'mineure' | 'majeure' | 'bloquante'
@@ -312,6 +315,9 @@ export interface TaskHistory {
   role: string | null
   action: string | null
   detail: string | null
+  /** QUI a fait l'action (traçabilité 18 MCHF) */
+  personne_nom: string | null
+  entreprise_id: string | null
   created_at: string
 }
 

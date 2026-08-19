@@ -13,6 +13,8 @@ interface AuthState {
   /** Entreprise de la session (cloisonnement sous-traitants) */
   entrepriseId: string | null
   entrepriseName: string | null
+  /** Timestamp du login — la session expire après 12 h */
+  loginAt: number | null
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
@@ -46,6 +48,7 @@ export const useAuthStore = create<AuthState>()(
       role: null,
       entrepriseId: null,
       entrepriseName: null,
+      loginAt: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -73,6 +76,7 @@ export const useAuthStore = create<AuthState>()(
             chantier,
             equipe: utilisateur.equipe ?? null,
             role: utilisateur.role,
+            loginAt: Date.now(),
             isAuthenticated: true,
             isLoading: false,
             error: null
@@ -172,6 +176,7 @@ export const useAuthStore = create<AuthState>()(
             role: result.role,
             entrepriseId: result.entreprise_id ?? null,
             entrepriseName: result.entreprise_name ?? null,
+            loginAt: Date.now(),
             isAuthenticated: true,
             isLoading: false,
             error: null,
@@ -195,6 +200,7 @@ export const useAuthStore = create<AuthState>()(
           role: null,
           entrepriseId: null,
           entrepriseName: null,
+          loginAt: null,
           isAuthenticated: false,
           error: null,
           codeEntrepriseSession: null
@@ -209,7 +215,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'nc-auth',
-      // Session persistante 24h
+      // Session persistée — expiration 12 h contrôlée par ProtectedRoute
       partialize: (state) => ({
         utilisateur: state.utilisateur,
         personne: state.personne,
@@ -218,6 +224,7 @@ export const useAuthStore = create<AuthState>()(
         role: state.role,
         entrepriseId: state.entrepriseId,
         entrepriseName: state.entrepriseName,
+        loginAt: state.loginAt,
         isAuthenticated: state.isAuthenticated
       })
     }

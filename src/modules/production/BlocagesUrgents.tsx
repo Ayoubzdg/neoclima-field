@@ -4,21 +4,19 @@ import { AlertTriangle, ArrowLeft, ChevronRight, CheckCircle } from 'lucide-reac
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
 import { todayISO, formatDateFR } from '@/utils/dates'
+import { BLOCAGE_LABELS } from './BlocageForm'
 import type { Task } from '@/types/models'
 
-const TYPE_LABELS: Record<string, string> = {
-  materiau: '📦 Matériau',
-  acces: '🚧 Accès',
-  autre_corps: '🔧 Autre corps',
-  gros_oeuvre: '🏗️ Gros œuvre',
-  equipement: '⚙️ Équipement',
-  autre: '❓ Autre',
+/** Durée depuis le blocage, en heures (basée sur updated_at) */
+function heuresDepuisBlocage(task: Task): number | null {
+  if (!task.updated_at) return null
+  return Math.round((Date.now() - new Date(task.updated_at).getTime()) / 3_600_000)
 }
 
 export default function BlocagesUrgents() {
   const navigate = useNavigate()
   const { chantier, role, entrepriseId } = useAuthStore()
-  const { allTasks, isLoading, loadAllTasks, updateStatus } = useProductionStore()
+  const { allTasks, isLoading, loadAllTasks, leverBlocage } = useProductionStore()
   const today = todayISO()
 
   useEffect(() => {
@@ -36,7 +34,8 @@ export default function BlocagesUrgents() {
     .filter(t => !isST || t.entreprise_id === entrepriseId)
 
   const handleLever = async (task: Task) => {
-    await updateStatus(task.id, 'en_cours', { type_blocage: null, comment: null }, role ?? 'chef')
+    // Levée unifiée : statut + contrainte liée + historique avec durée
+    await leverBlocage(task, role ?? 'chef')
   }
 
   return (
@@ -97,11 +96,25 @@ export default function BlocagesUrgents() {
                       <span className="text-xs text-gray-500">{task.equipe.name}</span>
                     </div>
                   )}
-                  {task.type_blocage && (
-                    <span className="inline-block mt-1.5 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                      {TYPE_LABELS[task.type_blocage] ?? task.type_blocage}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    {task.type_blocage && (
+                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                        {BLOCAGE_LABELS[task.type_blocage] ?? task.type_blocage}
+                      </span>
+                    )}
+                    {(() => {
+                      const h = heuresDepuisBlocage(task)
+                      if (h == null) return null
+                      const urgent = h >= 48
+                      return (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                          ${urgent ? 'bg-red-600 text-white' : h >= 24 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {h < 1 ? "< 1 h" : h < 24 ? `depuis ${h} h` : `depuis ${Math.floor(h / 24)} j ${h % 24} h`}
+                          {urgent && ' ⚠'}
+                        </span>
+                      )
+                    })()}
+                  </div>
                   {task.comment && (
                     <p className="text-xs text-gray-500 mt-1 truncate">{task.comment}</p>
                   )}
