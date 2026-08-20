@@ -316,9 +316,9 @@ export function RegieEdit() {
                         print:bg-transparent print:rounded-none">
           <p className="text-[10px] leading-snug text-gray-700">
             <b className="text-nc-red">Validation impérative :</b> aucun travail supplémentaire ne peut être
-            engagé sans validation préalable du chargé d'affaires. Le présent rapport atteste de travaux
-            exécutés à la demande du demandeur mentionné ci-dessus et vaut reconnaissance des heures
-            et fournitures indiquées.
+            engagé sans validation préalable du client. La prestation sera effectuée au tarif en régie.
+            Le présent rapport atteste de travaux exécutés à la demande du demandeur mentionné ci-dessus
+            et vaut reconnaissance des heures et fournitures indiquées.
           </p>
         </div>
 
