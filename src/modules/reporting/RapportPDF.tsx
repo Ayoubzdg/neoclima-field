@@ -47,9 +47,25 @@ interface Props {
   chantier: Chantier
   semaine: string
   stats: Stats
+  /** Synthèse IA (markdown **gras** uniquement) — optionnelle */
+  synthese?: string
 }
 
-export function RapportPDF({ chantier, semaine, stats }: Props) {
+/** Rend une ligne markdown simple : segments **gras** en Helvetica-Bold */
+function LigneSynthese({ ligne }: { ligne: string }) {
+  const segments = ligne.split('**')
+  return (
+    <Text style={{ fontSize: 8.5, color: '#374151', lineHeight: 1.5 }}>
+      {segments.map((seg, i) =>
+        i % 2 === 1
+          ? <Text key={i} style={{ fontFamily: 'Helvetica-Bold', color: '#2C3E50' }}>{seg}</Text>
+          : <Text key={i}>{seg}</Text>
+      )}
+    </Text>
+  )
+}
+
+export function RapportPDF({ chantier, semaine, stats, synthese }: Props) {
   const semaineLabel = getSemaineLabel(semaine)
   const now = new Date().toLocaleDateString('fr-CH', { day: 'numeric', month: 'long', year: 'numeric' })
   const tasksDone = stats.tasks.filter(t => t.status === 'done')
@@ -71,6 +87,20 @@ export function RapportPDF({ chantier, semaine, stats }: Props) {
             </Text>
           </View>
         </View>
+
+        {/* Synthèse IA (relue/éditée dans l'app avant export) */}
+        {synthese && synthese.trim().length > 0 && (
+          <View style={S.section}>
+            <Text style={S.sectionTitle}>Synthèse de la semaine</Text>
+            <View style={{ backgroundColor: '#F9FAFB', border: '1 solid #E5E7EB', borderRadius: 6, padding: '8 10' }}>
+              {synthese.split('\n').map((l, i) =>
+                l.trim().length === 0
+                  ? <Text key={i} style={{ fontSize: 4 }}> </Text>
+                  : <LigneSynthese key={i} ligne={l} />
+              )}
+            </View>
+          </View>
+        )}
 
         {/* KPIs */}
         <View style={S.section}>

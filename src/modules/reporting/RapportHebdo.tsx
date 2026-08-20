@@ -32,9 +32,12 @@ export default function RapportHebdo() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isGeneratingClient, setIsGeneratingClient] = useState(false)
   const [clientError, setClientError] = useState<string | null>(null)
+  // Synthèse IA de la semaine — partagée avec les exports PDF et PPTX
+  const [syntheseIA, setSyntheseIA] = useState('')
 
   useEffect(() => {
     if (!chantier?.id) return
+    setSyntheseIA('') // la synthèse est propre à chaque semaine
     setIsLoading(true)
     Promise.all([
       getTasksByChantier(chantier.id, { semaine }),
@@ -157,6 +160,17 @@ export default function RapportHebdo() {
           : 'Non démarré — planifié',
       }))
 
+      // ── Synthèse IA → faits marquants du PPTX ──
+      // Paragraphes (sans markdown), max 6 puces lisibles en slide
+      const faitsIA = syntheseIA
+        ? syntheseIA
+            .replace(/\*\*/g, '')
+            .split(/\n\s*\n/)
+            .map(p => p.replace(/\s*\n\s*/g, ' ').trim())
+            .filter(p => p.length > 0)
+            .slice(0, 6)
+        : []
+
       const nbVigilances = vigilances.length
       const statut_global =
         avanGlobal >= 80 ? 'MAÎTRISÉ' :
@@ -185,7 +199,7 @@ export default function RapportHebdo() {
         equipes,
         vigilances,
         prochaines_etapes,
-        faits_marquants: [],
+        faits_marquants: faitsIA,
       }
 
       const response = await fetch(`${RAPPORT_SERVICE_URL}/generate`, {
@@ -223,7 +237,7 @@ export default function RapportHebdo() {
       const { RapportPDF } = await import('./RapportPDF')
       const blob = await pdf(
         // @ts-ignore JSX element passed to pdf()
-        <RapportPDF chantier={chantier} semaine={semaine} stats={stats} />
+        <RapportPDF chantier={chantier} semaine={semaine} stats={stats} synthese={syntheseIA} />
       ).toBlob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -276,6 +290,8 @@ export default function RapportHebdo() {
               type="hebdo"
               chantier={chantier?.name ?? ''}
               periode={getSemaineLabel(semaine)}
+              value={syntheseIA}
+              onChange={setSyntheseIA}
               donnees={{
                 ppc_pct: stats.ppc,
                 taches_engagees: stats.tasksEngagees,

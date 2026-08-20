@@ -9,13 +9,21 @@ import { genererSyntheseIA } from '@/lib/supabase'
  * Le texte est ÉDITABLE avant impression : l'IA propose,
  * l'humain valide.
  */
-export default function SyntheseIA({ type, chantier, periode, donnees }: {
+export default function SyntheseIA({ type, chantier, periode, donnees, value, onChange }: {
   type: 'jour' | 'hebdo'
   chantier: string
   periode: string
   donnees: unknown
+  /** Mode contrôlé : le parent garde le texte (pour l'inclure dans ses exports PDF/PPTX) */
+  value?: string
+  onChange?: (texte: string) => void
 }) {
-  const [texte, setTexte] = useState('')
+  const [interne, setInterne] = useState('')
+  const texte = value !== undefined ? value : interne
+  const setTexte = (t: string) => {
+    if (onChange) onChange(t)
+    else setInterne(t)
+  }
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
