@@ -124,6 +124,8 @@ export default function TravauxSuppList() {
         cree_par: nom,
       })
       navigate(`/reporting/regie/${r.id}`)
+    } catch (e) {
+      alert(`Création du bon de régie impossible : ${e instanceof Error ? e.message : 'erreur inconnue'}\n\nSi le message mentionne une colonne (demandeur, emplacement, photos, flux…), exécute supabase/regie-v2.sql dans le SQL Editor de Supabase.`)
     } finally {
       setBusyId(null)
     }
