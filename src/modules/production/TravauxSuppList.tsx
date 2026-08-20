@@ -4,7 +4,10 @@ import {
   Zap, CheckCircle, XCircle, Clock, Loader2, RefreshCw, HardHat, Briefcase, FileSignature
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { getTravauxSupp, updateTravauxSupp, createRapportRegie } from '@/lib/supabase'
+import {
+  getTravauxSupp, updateTravauxSupp, createRapportRegie,
+  getRapportRegieByTravauxSupp, updateRapportRegie
+} from '@/lib/supabase'
 import { formatDateShort } from '@/utils/dates'
 import SecureImage from '@/components/ui/SecureImage'
 import type { TravauxSupp, TravauxSuppStatut } from '@/types/models'
@@ -80,11 +83,26 @@ export default function TravauxSuppList() {
   const marquerRealise = (t: TravauxSupp) =>
     applyUpdate(t.id, { statut: 'realise' })
 
-  // Génère un rapport de régie prérempli depuis ce travail supp
+  // Ouvre le bon de régie lié (ou le crée, prérempli) — établi
+  // AVANT le démarrage des travaux, dès le signalement
   const creerRegie = async (t: TravauxSupp) => {
     if (!chantier?.id) return
     setBusyId(t.id)
     try {
+      // Bon déjà existant → on le rouvre en rafraîchissant le flux
+      const existant = await getRapportRegieByTravauxSupp(t.id)
+      if (existant) {
+        await updateRapportRegie(existant.id, {
+          flux: {
+            signale_par: t.cree_par,
+            signale_le: t.created_at,
+            analyse_par: t.valide_cc_par,
+            autorise_par: t.valide_ca_par,
+          },
+        }).catch(() => {})
+        navigate(`/reporting/regie/${existant.id}`)
+        return
+      }
       const r = await createRapportRegie({
         chantier_id: chantier.id,
         travaux_supp_id: t.id,
@@ -185,10 +203,12 @@ export default function TravauxSuppList() {
                         <Clock size={11} /> En attente de validation du chargé d'affaires
                       </span>
                     )}
-                    {(t.statut === 'valide_ca' || t.statut === 'realise') && isChef && (
+                    {/* Bon de régie : dès le signalement, AVANT le démarrage
+                        des travaux (validation client sur le bon) */}
+                    {isChef && (
                       <button onClick={() => creerRegie(t)} disabled={busy}
                         className="px-2.5 py-1.5 rounded-lg border border-nc-blue/30 text-nc-blue text-xs font-medium hover:bg-blue-50 disabled:opacity-40">
-                        <FileSignature size={12} className="inline mr-1" />Rapport de régie
+                        <FileSignature size={12} className="inline mr-1" />Bon de régie
                       </button>
                     )}
                     {t.statut === 'valide_ca' && (

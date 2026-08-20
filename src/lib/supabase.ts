@@ -878,6 +878,18 @@ export async function getRapportRegie(id: string): Promise<RapportRegie | null> 
   return data as RapportRegie
 }
 
+/** Rapport de régie déjà lié à un travail supp (évite les doublons) */
+export async function getRapportRegieByTravauxSupp(travauxSuppId: string): Promise<RapportRegie | null> {
+  const { data } = await supabase
+    .from('rapports_regie')
+    .select('*')
+    .eq('travaux_supp_id', travauxSuppId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return (data as RapportRegie | null) ?? null
+}
+
 export async function createRapportRegie(r: Partial<RapportRegie>): Promise<RapportRegie> {
   const { data, error } = await supabase
     .from('rapports_regie').insert(r).select().single()
