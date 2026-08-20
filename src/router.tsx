@@ -27,6 +27,7 @@ import Lookahead from '@/modules/planning/Lookahead'
 import WeeklyPlan from '@/modules/planning/WeeklyPlan'
 import PpcDashboard from '@/modules/planning/PpcDashboard'
 import ContraintesAgenda from '@/modules/planning/ContraintesAgenda'
+import PreparationHebdo from '@/modules/planning/PreparationHebdo'
 
 // Module Plans
 import ZonesList from '@/modules/plans/ZonesList'
@@ -89,6 +90,7 @@ export const router = createBrowserRouter([
       { path: 'planning/weekly', element: guard(['chef', 'ca', 'admin'], <WeeklyPlan />) },
       { path: 'planning/ppc', element: guard(['chef', 'ca', 'admin'], <PpcDashboard />) },
       { path: 'planning/contraintes', element: guard(['chef', 'ca', 'admin'], <ContraintesAgenda />) },
+      { path: 'planning/preparation', element: guard(['chef', 'ca', 'admin'], <PreparationHebdo />) },
 
       // ── Plans ───────────────────────────────────────────
       { path: 'plans', element: <ZonesList /> },

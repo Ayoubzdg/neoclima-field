@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   ClipboardList, Map, BarChart2, Shield, Settings,
   Users, BarChart3, HardHat, LogOut, QrCode, Calendar, Building2,
-  ShieldCheck, AlertTriangle
+  ShieldCheck, AlertTriangle, ClipboardCheck
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
@@ -29,6 +29,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/planning',                icon: <BarChart3 size={18} />,    label: 'Gantt chantier',  roles: ['chef', 'ca', 'admin'] },
       { to: '/planning/contraintes',    icon: <Calendar size={18} />,     label: 'Agenda contraintes', roles: ['chef', 'ca', 'admin'] },
+      { to: '/planning/preparation',    icon: <ClipboardCheck size={18} />, label: 'Préparation hebdo', roles: ['chef', 'ca', 'admin'] },
       { to: '/planning/lookahead',      icon: <Calendar size={18} />,     label: 'Lookahead 3S',    roles: ['chef', 'ca', 'admin'] },
       { to: '/planning/weekly',         icon: <ClipboardList size={18} />,label: 'Weekly Plan',     roles: ['chef', 'ca', 'admin'] },
       { to: '/planning/ppc',            icon: <BarChart2 size={18} />,    label: 'PPC & Analyse',   roles: ['chef', 'ca', 'admin'] },
