@@ -1,16 +1,31 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Settings, Save, ShieldCheck, ChevronRight } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { upsertChantier } from '@/lib/supabase'
-import type { Chantier } from '@/types/models'
+import { upsertChantier, getEntreprises, supabase } from '@/lib/supabase'
+import type { Chantier, Entreprise } from '@/types/models'
 
 export default function ParamChantier() {
   const { chantier, role, utilisateur, setChantier } = useAuthStore()
   const navigate = useNavigate()
   const [form, setForm] = useState<Partial<Chantier>>(chantier ?? {})
+  const [entreprises, setEntreprises] = useState<Entreprise[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  // Liste des entreprises + valeur actuelle du titulaire
+  // (la session ne porte pas ce champ → lecture directe en base)
+  useEffect(() => {
+    getEntreprises().then(setEntreprises).catch(() => {})
+    if (!chantier?.id) return
+    supabase.from('chantiers')
+      .select('entreprise_titulaire_id')
+      .eq('id', chantier.id)
+      .single()
+      .then(({ data }) => {
+        if (data) setForm(p => ({ ...p, entreprise_titulaire_id: data.entreprise_titulaire_id }))
+      })
+  }, [chantier?.id])
 
   const handleSave = async () => {
     if (!form.id) return
@@ -71,6 +86,17 @@ export default function ParamChantier() {
         <div>
           <label className="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Client / Maître d'ouvrage</label>
           <input className="input-field" value={form.client ?? ''} onChange={e => setForm(p => ({ ...p, client: e.target.value }))} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Entreprise titulaire</label>
+          <select className="input-field" value={form.entreprise_titulaire_id ?? ''}
+            onChange={e => setForm(p => ({ ...p, entreprise_titulaire_id: e.target.value || null }))}>
+            <option value="">— Non définie —</option>
+            {entreprises.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+          <p className="text-[10px] text-gray-400 mt-1">
+            Entreprise ayant le contrat avec le client — son nom apparaît en en-tête des rapports de régie.
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

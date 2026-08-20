@@ -47,6 +47,8 @@ export interface Chantier {
   budget_heures: number
   takt_duree: number
   statut: ChantierStatut
+  /** Entreprise contractante avec le client — émettrice des rapports de régie */
+  entreprise_titulaire_id?: string | null
   created_at: string
 }
 
