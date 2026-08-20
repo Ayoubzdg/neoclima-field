@@ -57,7 +57,18 @@ export const supabase = createClient(
 // ── Helpers ─────────────────────────────────────────────────
 
 function handleError(error: unknown, context: string): never {
-  const msg = error instanceof Error ? error.message : String(error)
+  // Les erreurs PostgREST sont des objets {message, details, hint, code},
+  // pas des instances d'Error → extraire les champs utiles
+  let msg: string
+  if (error instanceof Error) {
+    msg = error.message
+  } else if (error && typeof error === 'object') {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string }
+    msg = [e.message, e.details, e.hint, e.code ? `(code ${e.code})` : null]
+      .filter(Boolean).join(' — ') || JSON.stringify(error)
+  } else {
+    msg = String(error)
+  }
   throw new Error(`[Supabase ${context}] ${msg}`)
 }
 
