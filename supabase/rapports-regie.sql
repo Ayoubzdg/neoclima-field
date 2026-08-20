@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS rapports_regie (
 
   date_rapport    DATE NOT NULL DEFAULT CURRENT_DATE,
   client          TEXT,                      -- prérempli depuis le chantier
+  demandeur       TEXT,                      -- OBLIGATOIRE : qui a demandé les travaux
   description     TEXT,                      -- "Travaux exécutés"
 
   -- Lignes ouvriers : [{ref, nombre, fonction, heures, heures_supp}]
@@ -37,6 +38,9 @@ DROP POLICY IF EXISTS regie_interne ON rapports_regie;
 CREATE POLICY regie_interne ON rapports_regie
   FOR ALL TO authenticated
   USING (est_interne()) WITH CHECK (est_interne());
+
+-- Si la table existait déjà (script exécuté avant l'ajout du demandeur) :
+ALTER TABLE rapports_regie ADD COLUMN IF NOT EXISTS demandeur TEXT;
 
 -- Vérification
 SELECT COUNT(*) AS rapports FROM rapports_regie;

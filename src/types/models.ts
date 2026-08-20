@@ -378,6 +378,8 @@ export interface RapportRegie {
   travaux_supp_id: string | null
   date_rapport: string
   client: string | null
+  /** OBLIGATOIRE avant impression : qui a demandé les travaux */
+  demandeur: string | null
   description: string | null
   lignes: LigneRegie[]
   materiel: string | null

@@ -105,7 +105,7 @@ export function RegieList() {
 export function RegieEdit() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { chantier } = useAuthStore()
+  const { chantier, entrepriseName } = useAuthStore()
   const [r, setR] = useState<RapportRegie | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -121,13 +121,20 @@ export function RegieEdit() {
   const setLigne = (i: number, patch: Partial<LigneRegie>) =>
     set({ lignes: r!.lignes.map((l, j) => j === i ? { ...l, ...patch } : l) })
 
+  const demandeurManquant = !r?.demandeur?.trim()
+
   const save = async () => {
     if (!r) return
+    if (demandeurManquant) {
+      alert('Le nom du DEMANDEUR est obligatoire (qui a demandé ces travaux ?).')
+      return
+    }
     setIsSaving(true)
     try {
       await updateRapportRegie(r.id, {
         date_rapport: r.date_rapport,
         client: r.client,
+        demandeur: r.demandeur,
         description: r.description,
         lignes: r.lignes,
         materiel: r.materiel,
@@ -139,7 +146,14 @@ export function RegieEdit() {
     }
   }
 
-  const imprimer = async () => { await save(); window.print() }
+  const imprimer = async () => {
+    if (demandeurManquant) {
+      alert('Impression impossible : le nom du DEMANDEUR est obligatoire.')
+      return
+    }
+    await save()
+    window.print()
+  }
 
   if (isLoading) return <div className="flex justify-center py-16"><Loader2 size={28} className="animate-spin text-nc-red" /></div>
   if (!r) return <div className="p-4 text-center text-gray-400">Rapport introuvable</div>
@@ -175,8 +189,10 @@ export function RegieEdit() {
         {/* En-tête */}
         <div className="flex justify-between items-start border-b-2 border-nc-blue pb-3 mb-3">
           <div>
-            <p className="font-black text-nc-blue text-lg leading-tight">NEOCLIMA</p>
-            <p className="text-[10px] text-gray-400">Ventilation · CVC</p>
+            <p className="font-black text-nc-blue text-lg leading-tight uppercase">
+              {entrepriseName ?? 'Entreprise'}
+            </p>
+            <p className="text-[10px] text-gray-400">Rapport de travaux en régie</p>
           </div>
           <div className="text-right">
             <p className="font-bold text-nc-blue">Rapport journalier / de régie</p>
@@ -187,8 +203,8 @@ export function RegieEdit() {
           </div>
         </div>
 
-        {/* Chantier / Client */}
-        <div className="grid grid-cols-2 gap-4 mb-3">
+        {/* Chantier / Client / Demandeur */}
+        <div className="grid grid-cols-3 gap-4 mb-3">
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase">Chantier</p>
             <p className="text-sm font-semibold text-gray-800">{chantier?.name}</p>
@@ -198,6 +214,15 @@ export function RegieEdit() {
             <input value={r.client ?? ''} onChange={e => set({ client: e.target.value })}
               placeholder="Nom du client"
               className="text-sm font-semibold text-gray-800 w-full border-b border-dashed border-gray-300 outline-none print:border-0" />
+          </div>
+          <div>
+            <p className={`text-[10px] font-bold uppercase ${demandeurManquant ? 'text-red-500' : 'text-gray-400'}`}>
+              Demandeur *
+            </p>
+            <input value={r.demandeur ?? ''} onChange={e => set({ demandeur: e.target.value })}
+              placeholder="Qui a demandé ?"
+              className={`text-sm font-semibold text-gray-800 w-full border-b outline-none print:border-0
+                ${demandeurManquant ? 'border-red-400 border-solid bg-red-50/50' : 'border-dashed border-gray-300'}`} />
           </div>
         </div>
 
@@ -286,6 +311,17 @@ export function RegieEdit() {
                        focus:border-nc-blue print:border-0 print:p-0" />
         </div>
 
+        {/* Mention légale — validation impérative */}
+        <div className="border border-nc-red/40 bg-red-50/40 rounded-lg px-3 py-2 mb-2
+                        print:bg-transparent print:rounded-none">
+          <p className="text-[10px] leading-snug text-gray-700">
+            <b className="text-nc-red">Validation impérative :</b> aucun travail supplémentaire ne peut être
+            engagé sans validation préalable du chargé d'affaires. Le présent rapport atteste de travaux
+            exécutés à la demande du demandeur mentionné ci-dessus et vaut reconnaissance des heures
+            et fournitures indiquées.
+          </p>
+        </div>
+
         {/* Signatures */}
         <div className="grid grid-cols-2 gap-8 pt-6 mt-2 border-t border-gray-200">
           <div>
@@ -298,6 +334,12 @@ export function RegieEdit() {
               Signature de l'entrepreneur{r.cree_par ? ` — ${r.cree_par}` : ''}
             </p>
           </div>
+        </div>
+
+        {/* Pied de page : powered by Neoclima */}
+        <div className="flex items-center justify-center gap-1.5 mt-5 pt-2 border-t border-gray-100">
+          <span className="text-[9px] text-gray-400">powered by</span>
+          <img src="/logo.png" alt="Neoclima" className="h-3.5 w-auto object-contain opacity-60" />
         </div>
       </div>
     </div>
