@@ -863,18 +863,12 @@ export async function getRapportsRegie(chantierId: string): Promise<RapportRegie
  * Retourne null si non définie (fallback : entreprise de la session).
  */
 export async function getEntrepriseTitulaire(chantierId: string): Promise<string | null> {
+  // RPC SECURITY DEFINER : contourne la RLS de "entreprises"
+  // (réservée ca/admin) pour que les chefs voient aussi le nom
   const { data, error } = await supabase
-    .from('chantiers')
-    .select('entreprise_titulaire_id')
-    .eq('id', chantierId)
-    .single()
-  if (error || !data?.entreprise_titulaire_id) return null
-  const { data: ent } = await supabase
-    .from('entreprises')
-    .select('name')
-    .eq('id', data.entreprise_titulaire_id)
-    .single()
-  return ent?.name ?? null
+    .rpc('get_entreprise_titulaire', { p_chantier_id: chantierId })
+  if (error) return null
+  return (data as string | null) ?? null
 }
 
 export async function getRapportRegie(id: string): Promise<RapportRegie | null> {

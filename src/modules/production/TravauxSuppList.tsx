@@ -89,9 +89,19 @@ export default function TravauxSuppList() {
         chantier_id: chantier.id,
         travaux_supp_id: t.id,
         client: chantier.client ?? null,
+        emplacement: t.emplacement ?? t.zone_takt?.name ?? null,
         description: `${t.zone_takt?.name ? `${t.zone_takt.name} — ` : ''}${t.description}`,
         lignes: [{ ref: '', nombre: 1, fonction: 'monteur',
                    heures: t.heures_estimees ?? 0, heures_supp: 0 }],
+        // Photo du constat → annexe du rapport
+        photos: t.photo_url ? [t.photo_url] : [],
+        // Traçabilité interne monteur → chef → CA
+        flux: {
+          signale_par: t.cree_par,
+          signale_le: t.created_at,
+          analyse_par: t.valide_cc_par,
+          autorise_par: t.valide_ca_par,
+        },
         cree_par: nom,
       })
       navigate(`/reporting/regie/${r.id}`)
@@ -125,8 +135,10 @@ export default function TravauxSuppList() {
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${meta.cls}`}>
                         {meta.label}
                       </span>
-                      {t.zone_takt?.name && (
-                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">📍 {t.zone_takt.name}</span>
+                      {(t.zone_takt?.name || t.emplacement) && (
+                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                          📍 {[t.zone_takt?.name, t.emplacement].filter(Boolean).join(' · ')}
+                        </span>
                       )}
                     </div>
                     <p className="text-sm text-gray-700 leading-snug">{t.description}</p>

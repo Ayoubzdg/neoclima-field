@@ -346,6 +346,8 @@ export interface TravauxSupp {
   entreprise_id: string | null
   task_id: string | null
   description: string
+  /** Emplacement exact désigné par le monteur (ex : "N3, local 3.081, axe 12") */
+  emplacement: string | null
   photo_url: string | null
   statut: TravauxSuppStatut
   heures_estimees: number | null
@@ -380,12 +382,26 @@ export interface RapportRegie {
   client: string | null
   /** OBLIGATOIRE avant impression : qui a demandé les travaux */
   demandeur: string | null
+  /** Emplacement exact des travaux (désigné par le monteur) */
+  emplacement: string | null
   description: string | null
   lignes: LigneRegie[]
   materiel: string | null
+  /** Chemins storage des photos — imprimées en annexe */
+  photos: string[]
+  /** Flux de validation interne (snapshot du travail supp lié) */
+  flux: FluxRegie | null
   cree_par: string | null
   created_at: string
   updated_at: string
+}
+
+/** Traçabilité interne monteur → chef → CA affichée discrètement */
+export interface FluxRegie {
+  signale_par: string | null
+  signale_le: string | null
+  analyse_par: string | null
+  autorise_par: string | null
 }
 
 // ── Effectif ────────────────────────────────────────────────

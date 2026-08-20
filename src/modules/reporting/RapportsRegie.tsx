@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  FileSignature, Plus, Printer, Save, Trash2, ArrowLeft, Loader2, ChevronRight
+  FileSignature, Plus, Printer, Save, Trash2, ArrowLeft, Loader2, ChevronRight, Camera
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import {
   getRapportsRegie, getRapportRegie, createRapportRegie, updateRapportRegie,
-  getEntrepriseTitulaire
+  getEntrepriseTitulaire, preparePhoto, uploadPhotoBlob
 } from '@/lib/supabase'
+import SecureImage from '@/components/ui/SecureImage'
 import { todayISO, formatDateFR } from '@/utils/dates'
 import type { RapportRegie, LigneRegie } from '@/types/models'
 
@@ -114,6 +115,8 @@ export function RegieEdit() {
   // Entreprise titulaire du chantier (ex : ROOS) — c'est elle qui
   // émet le rapport, quel que soit l'utilisateur connecté
   const [titulaire, setTitulaire] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!id) return
@@ -144,9 +147,11 @@ export function RegieEdit() {
         date_rapport: r.date_rapport,
         client: r.client,
         demandeur: r.demandeur,
+        emplacement: r.emplacement,
         description: r.description,
         lignes: r.lignes,
         materiel: r.materiel,
+        photos: r.photos ?? [],
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -162,6 +167,24 @@ export function RegieEdit() {
     }
     await save()
     window.print()
+  }
+
+  // Ajout d'une photo à l'annexe (compressée puis stockée)
+  const ajouterPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f || !r || !chantier?.id) return
+    setUploadingPhoto(true)
+    try {
+      const rawPath = `regie/${chantier.id}/${Date.now()}-${f.name.replace(/\s+/g, '_')}`
+      const prepared = await preparePhoto(f, rawPath)
+      const url = await uploadPhotoBlob(prepared.body, prepared.path, prepared.contentType)
+      set({ photos: [...(r.photos ?? []), url] })
+    } catch {
+      alert('Envoi de la photo impossible — vérifie ta connexion.')
+    } finally {
+      setUploadingPhoto(false)
+      if (photoRef.current) photoRef.current.value = ''
+    }
   }
 
   if (isLoading) return <div className="flex justify-center py-16"><Loader2 size={28} className="animate-spin text-nc-red" /></div>
@@ -233,6 +256,14 @@ export function RegieEdit() {
               className={`text-sm font-semibold text-gray-800 w-full border-b outline-none print:border-0
                 ${demandeurManquant ? 'border-red-400 border-solid bg-red-50/50' : 'border-dashed border-gray-300'}`} />
           </div>
+        </div>
+
+        {/* Emplacement exact (désigné par le monteur) */}
+        <div className="mb-3">
+          <p className="text-[10px] font-bold text-gray-400 uppercase">Emplacement exact</p>
+          <input value={r.emplacement ?? ''} onChange={e => set({ emplacement: e.target.value })}
+            placeholder="Ex : N3, local 3.081, axe 12 — au-dessus du faux plafond"
+            className="text-sm font-semibold text-gray-800 w-full border-b border-dashed border-gray-300 outline-none print:border-0" />
         </div>
 
         {/* Travaux exécutés */}
@@ -331,6 +362,16 @@ export function RegieEdit() {
           </p>
         </div>
 
+        {/* Flux de validation interne — discret */}
+        {r.flux && (r.flux.signale_par || r.flux.analyse_par || r.flux.autorise_par) && (
+          <p className="text-[8px] text-gray-400 mb-2 leading-snug">
+            Suivi interne :
+            {r.flux.signale_par && ` signalé par ${r.flux.signale_par}${r.flux.signale_le ? ` le ${formatDateFR(r.flux.signale_le)}` : ''}`}
+            {r.flux.analyse_par && ` → analysé par ${r.flux.analyse_par} (chef de chantier)`}
+            {r.flux.autorise_par && ` → autorisé par ${r.flux.autorise_par} (chargé d'affaires)`}
+          </p>
+        )}
+
         {/* Signatures */}
         <div className="grid grid-cols-2 gap-8 pt-6 mt-2 border-t border-gray-200">
           <div>
@@ -349,6 +390,42 @@ export function RegieEdit() {
         <div className="flex items-center justify-center gap-1.5 mt-5 pt-2 border-t border-gray-100">
           <span className="text-[9px] text-gray-400">powered by</span>
           <img src="/logo.png" alt="Neoclima" className="h-3.5 w-auto object-contain opacity-60" />
+        </div>
+
+        {/* ── ANNEXE : PHOTOS (page séparée à l'impression,
+               masquée à l'impression si vide) ── */}
+        <div className={`mt-6 pt-4 border-t border-gray-200 print:break-before-page print:border-0 print:mt-0 print:pt-2
+                         ${(r.photos?.length ?? 0) === 0 ? 'print:hidden' : ''}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-bold text-gray-400 uppercase">
+                Annexe — Photos du constat (Rapport N° {r.numero})
+              </p>
+              <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={ajouterPhoto} />
+              <button onClick={() => photoRef.current?.click()} disabled={uploadingPhoto}
+                className="text-xs text-nc-blue flex items-center gap-1 print:hidden disabled:opacity-40">
+                {uploadingPhoto ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
+                Ajouter une photo
+              </button>
+            </div>
+            {(r.photos?.length ?? 0) === 0 ? (
+              <p className="text-xs text-gray-300 italic print:hidden">
+                Aucune photo — celles du travail supplémentaire lié sont ajoutées automatiquement
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {(r.photos ?? []).map((p, i) => (
+                  <div key={p} className="relative">
+                    <SecureImage src={p} alt={`Photo ${i + 1}`}
+                      className="w-full h-44 object-cover rounded-lg border border-gray-200 print:h-64 print:rounded-none" />
+                    <button
+                      onClick={() => set({ photos: (r.photos ?? []).filter(x => x !== p) })}
+                      className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/50 text-white print:hidden">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
         </div>
       </div>
     </div>

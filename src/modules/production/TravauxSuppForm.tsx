@@ -21,6 +21,7 @@ export default function TravauxSuppForm({ onClose, onCreated }: Props) {
   const { chantier, role, utilisateur, entrepriseId } = useAuthStore()
   const [zones, setZones] = useState<ZoneTakt[]>([])
   const [zoneId, setZoneId] = useState('')
+  const [emplacement, setEmplacement] = useState('')
   const [description, setDescription] = useState('')
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
@@ -41,7 +42,7 @@ export default function TravauxSuppForm({ onClose, onCreated }: Props) {
   }
 
   const handleSubmit = async () => {
-    if (!chantier?.id || !description.trim() || !photoFile) return
+    if (!chantier?.id || !description.trim() || !emplacement.trim() || !photoFile) return
     setIsSaving(true)
     setError(null)
     try {
@@ -55,6 +56,7 @@ export default function TravauxSuppForm({ onClose, onCreated }: Props) {
         chantier_id: chantier.id,
         zone_takt_id: zoneId || null,
         entreprise_id: entrepriseId ?? null,
+        emplacement: emplacement.trim(),
         description: description.trim(),
         photo_url: photoUrl,
         statut: 'signale',
@@ -125,6 +127,17 @@ export default function TravauxSuppForm({ onClose, onCreated }: Props) {
             </select>
           </div>
 
+          {/* Emplacement exact — repris tel quel sur le rapport de régie */}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-1.5">Emplacement exact *</p>
+            <input
+              value={emplacement}
+              onChange={e => setEmplacement(e.target.value)}
+              placeholder="Ex : N3, local 3.081, axe 12 — au-dessus du faux plafond"
+              className="input-field"
+            />
+          </div>
+
           {/* Description */}
           <div>
             <p className="text-sm font-semibold text-gray-700 mb-1.5">Description *</p>
@@ -143,7 +156,7 @@ export default function TravauxSuppForm({ onClose, onCreated }: Props) {
 
           <button
             onClick={handleSubmit}
-            disabled={isSaving || !description.trim() || !photoFile}
+            disabled={isSaving || !description.trim() || !emplacement.trim() || !photoFile}
             className="w-full h-12 rounded-xl bg-amber-500 text-white font-semibold
                        flex items-center justify-center gap-2 active:scale-95 transition-all
                        hover:bg-amber-600 disabled:opacity-40"
