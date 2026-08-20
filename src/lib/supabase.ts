@@ -1214,6 +1214,17 @@ export async function genererSyntheseIA(payload: {
   return json.texte
 }
 
+/** Synthèse du jour générée automatiquement à 17h (null si absente) */
+export async function getRapportJourAuto(chantierId: string, date: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('rapports_jour_auto')
+    .select('synthese')
+    .eq('chantier_id', chantierId)
+    .eq('date_rapport', date)
+    .maybeSingle()
+  return data?.synthese ?? null
+}
+
 export async function loginPersonneEdge(
   codeEntreprise: string,
   codePin: string

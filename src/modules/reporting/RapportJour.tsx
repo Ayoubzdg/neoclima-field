@@ -5,7 +5,8 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import {
-  getTasksByChantier, getEquipes, getEffectifs, getNonConformites, getTravauxSupp
+  getTasksByChantier, getEquipes, getEffectifs, getNonConformites, getTravauxSupp,
+  getRapportJourAuto
 } from '@/lib/supabase'
 import { todayISO, currentMondayISO, formatDateFR } from '@/utils/dates'
 import SyntheseIA from './SyntheseIA'
@@ -28,6 +29,9 @@ export default function RapportJour() {
   const [ncs, setNcs] = useState<NonConformite[]>([])
   const [travauxSupp, setTravauxSupp] = useState<TravauxSupp[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  // Synthèse : préremplie par le rapport auto de 17h si disponible
+  const [synthese, setSynthese] = useState('')
+  const [syntheseAuto, setSyntheseAuto] = useState(false)
 
   const load = useCallback(() => {
     if (!chantier?.id) return
@@ -44,6 +48,14 @@ export default function RapportJour() {
   }, [chantier?.id, today])
 
   useEffect(() => { load() }, [load])
+
+  // Synthèse automatique de 17h (si la fonction rapport-auto est déployée)
+  useEffect(() => {
+    if (!chantier?.id) return
+    getRapportJourAuto(chantier.id, today).then(s => {
+      if (s) { setSynthese(s); setSyntheseAuto(true) }
+    }).catch(() => {})
+  }, [chantier?.id, today])
 
   // ── Personnel ─────────────────────────────────────────────
   const presents = effectifs.reduce((s, e) => s + e.monteurs_presents, 0)
@@ -139,11 +151,18 @@ export default function RapportJour() {
       </div>
 
       <div className="space-y-3">
-        {/* Synthèse IA — rédigée depuis les chiffres ci-dessous */}
+        {/* Synthèse IA — préremplie à 17h par le rapport auto, régénérable */}
+        {syntheseAuto && (
+          <p className="text-[10px] text-gray-400 -mb-2 print:hidden">
+            ⚡ Synthèse générée automatiquement à 17h — relis, ajuste ou régénère.
+          </p>
+        )}
         <SyntheseIA
           type="jour"
           chantier={chantier?.name ?? ''}
           periode={formatDateFR(today)}
+          value={synthese}
+          onChange={setSynthese}
           donnees={{
             personnel: {
               presents, prevus,
