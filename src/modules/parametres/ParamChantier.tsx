@@ -19,11 +19,15 @@ export default function ParamChantier() {
     getEntreprises().then(setEntreprises).catch(() => {})
     if (!chantier?.id) return
     supabase.from('chantiers')
-      .select('entreprise_titulaire_id')
+      .select('entreprise_titulaire_id, entreprise_titulaire_nom')
       .eq('id', chantier.id)
       .single()
       .then(({ data }) => {
-        if (data) setForm(p => ({ ...p, entreprise_titulaire_id: data.entreprise_titulaire_id }))
+        if (data) setForm(p => ({
+          ...p,
+          entreprise_titulaire_id: data.entreprise_titulaire_id,
+          entreprise_titulaire_nom: data.entreprise_titulaire_nom,
+        }))
       })
   }, [chantier?.id])
 
@@ -89,13 +93,15 @@ export default function ParamChantier() {
         </div>
         <div>
           <label className="text-xs font-semibold text-gray-500 uppercase mb-1.5 block">Entreprise titulaire</label>
-          <select className="input-field" value={form.entreprise_titulaire_id ?? ''}
-            onChange={e => setForm(p => ({ ...p, entreprise_titulaire_id: e.target.value || null }))}>
-            <option value="">— Non définie —</option>
-            {entreprises.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
+          <input className="input-field" list="entreprises-connues"
+            value={form.entreprise_titulaire_nom ?? ''}
+            onChange={e => setForm(p => ({ ...p, entreprise_titulaire_nom: e.target.value || null }))}
+            placeholder="Ex : ROOS SA" />
+          <datalist id="entreprises-connues">
+            {entreprises.map(e => <option key={e.id} value={e.name} />)}
+          </datalist>
           <p className="text-[10px] text-gray-400 mt-1">
-            Entreprise ayant le contrat avec le client — son nom apparaît en en-tête des rapports de régie.
+            Entreprise ayant le contrat avec le client — ce nom apparaît en en-tête des rapports de régie.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3">

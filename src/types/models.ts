@@ -49,6 +49,8 @@ export interface Chantier {
   statut: ChantierStatut
   /** Entreprise contractante avec le client — émettrice des rapports de régie */
   entreprise_titulaire_id?: string | null
+  /** Nom libre du titulaire (prioritaire sur l'entreprise liée) */
+  entreprise_titulaire_nom?: string | null
   created_at: string
 }
 

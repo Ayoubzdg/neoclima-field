@@ -14,28 +14,23 @@
 -- émanent d'elle, quel que soit l'utilisateur connecté.
 
 ALTER TABLE chantiers
-  ADD COLUMN IF NOT EXISTS entreprise_titulaire_id UUID REFERENCES entreprises(id);
+  ADD COLUMN IF NOT EXISTS entreprise_titulaire_id UUID REFERENCES entreprises(id),
+  ADD COLUMN IF NOT EXISTS entreprise_titulaire_nom TEXT;
 
 -- RPC SECURITY DEFINER : lisible par tous les rôles internes,
 -- même si la RLS de "entreprises" est réservée ca/admin.
+-- Priorité au nom saisi librement, sinon nom de l'entreprise liée.
 CREATE OR REPLACE FUNCTION get_entreprise_titulaire(p_chantier_id UUID)
 RETURNS TEXT
 LANGUAGE sql SECURITY DEFINER STABLE AS $$
-  SELECT e.name
+  SELECT COALESCE(NULLIF(TRIM(c.entreprise_titulaire_nom), ''), e.name)
   FROM chantiers c
-  JOIN entreprises e ON e.id = c.entreprise_titulaire_id
+  LEFT JOIN entreprises e ON e.id = c.entreprise_titulaire_id
   WHERE c.id = p_chantier_id;
 $$;
 
--- Repère la bonne entreprise dans cette liste :
-SELECT id, name, code_acces FROM entreprises ORDER BY name;
-
--- Puis définis le titulaire (ADAPTE le nom si besoin) :
-UPDATE chantiers
-SET entreprise_titulaire_id = (
-  SELECT id FROM entreprises WHERE name ILIKE '%ROOS%' LIMIT 1
-)
-WHERE name = 'Satellite 10';
+-- (Le titulaire se définit maintenant dans l'app :
+--  Paramètres → Chantier → Entreprise titulaire, en texte libre)
 
 -- ── 2. EMPLACEMENT EXACT (travaux supp) ─────────────────────
 ALTER TABLE travaux_supp
@@ -48,9 +43,7 @@ ALTER TABLE rapports_regie
   ADD COLUMN IF NOT EXISTS flux JSONB;
 
 -- ── VÉRIFICATION ────────────────────────────────────────────
--- La colonne entreprise_titulaire doit afficher ROOS pour
--- Satellite 10. Si NULL → l'UPDATE ci-dessus n'a rien trouvé,
--- relance-le avec l'id exact de la liste des entreprises.
-SELECT c.name AS chantier, e.name AS entreprise_titulaire
+SELECT c.name AS chantier,
+       COALESCE(NULLIF(TRIM(c.entreprise_titulaire_nom), ''), e.name) AS entreprise_titulaire
 FROM chantiers c
 LEFT JOIN entreprises e ON e.id = c.entreprise_titulaire_id;
