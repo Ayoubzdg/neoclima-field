@@ -88,3 +88,18 @@ Si rien n'arrive : Edge Functions → push-blocage → **Logs** (tu sauras si le
 ## Événements futurs (même infra, il suffira d'ajouter des webhooks/fonctions)
 
 Reprise refusée → monteur · nouvelle révision de plan → équipes de la zone · travaux supp validés → demandeur · escalade blocage > 48 h (pg_cron). On les ajoutera quand le premier flux aura fait ses preuves sans spammer.
+
+---
+
+## Extension : notifications travaux supplémentaires
+
+Deux événements notifiés (fonction `push-travaux-supp`) :
+- **Signalement** par un monteur → chef + CA + admin
+- **Transmission au CA** (après analyse du chef) → CA + admin, « à autoriser »
+
+Déploiement (5 min, mêmes secrets VAPID) :
+1. Edge Functions → Deploy new function → nom : `push-travaux-supp` → coller `supabase/functions/push-travaux-supp/index.ts` → désactiver "Verify JWT" → Deploy
+2. Database Webhooks → Create a new hook :
+   - Name : `travaux-supp-push` · Table : `travaux_supp` · Events : **Insert + Update**
+   - Type : Supabase Edge Functions → `push-travaux-supp`
+3. Test : compte monteur → « ⚡ Travail non prévu » → notification chef/CA ; puis chef « Analyser → transmettre » → notification CA
