@@ -5,7 +5,8 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import {
-  getRapportsRegie, getRapportRegie, createRapportRegie, updateRapportRegie
+  getRapportsRegie, getRapportRegie, createRapportRegie, updateRapportRegie,
+  getEntrepriseTitulaire
 } from '@/lib/supabase'
 import { todayISO, formatDateFR } from '@/utils/dates'
 import type { RapportRegie, LigneRegie } from '@/types/models'
@@ -110,11 +111,19 @@ export function RegieEdit() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  // Entreprise titulaire du chantier (ex : ROOS) — c'est elle qui
+  // émet le rapport, quel que soit l'utilisateur connecté
+  const [titulaire, setTitulaire] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
     getRapportRegie(id).then(setR).finally(() => setIsLoading(false))
   }, [id])
+
+  useEffect(() => {
+    if (!chantier?.id) return
+    getEntrepriseTitulaire(chantier.id).then(setTitulaire)
+  }, [chantier?.id])
 
   const set = (patch: Partial<RapportRegie>) => setR(prev => prev ? { ...prev, ...patch } : prev)
 
@@ -190,7 +199,7 @@ export function RegieEdit() {
         <div className="flex justify-between items-start border-b-2 border-nc-blue pb-3 mb-3">
           <div>
             <p className="font-black text-nc-blue text-lg leading-tight uppercase">
-              {entrepriseName ?? 'Entreprise'}
+              {titulaire ?? entrepriseName ?? 'Entreprise'}
             </p>
             <p className="text-[10px] text-gray-400">Rapport de travaux en régie</p>
           </div>

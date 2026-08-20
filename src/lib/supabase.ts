@@ -857,6 +857,26 @@ export async function getRapportsRegie(chantierId: string): Promise<RapportRegie
   return (data ?? []) as RapportRegie[]
 }
 
+/**
+ * Entreprise titulaire du chantier (relation contractuelle avec
+ * le client) — les rapports de régie émanent d'elle.
+ * Retourne null si non définie (fallback : entreprise de la session).
+ */
+export async function getEntrepriseTitulaire(chantierId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('chantiers')
+    .select('entreprise_titulaire_id')
+    .eq('id', chantierId)
+    .single()
+  if (error || !data?.entreprise_titulaire_id) return null
+  const { data: ent } = await supabase
+    .from('entreprises')
+    .select('name')
+    .eq('id', data.entreprise_titulaire_id)
+    .single()
+  return ent?.name ?? null
+}
+
 export async function getRapportRegie(id: string): Promise<RapportRegie | null> {
   const { data, error } = await supabase
     .from('rapports_regie').select('*').eq('id', id).single()
