@@ -32,9 +32,10 @@ $$;
 -- (Le titulaire se définit maintenant dans l'app :
 --  Paramètres → Chantier → Entreprise titulaire, en texte libre)
 
--- ── 2. EMPLACEMENT EXACT (travaux supp) ─────────────────────
+-- ── 2. EMPLACEMENT EXACT + DEMANDEUR (travaux supp) ─────────
 ALTER TABLE travaux_supp
-  ADD COLUMN IF NOT EXISTS emplacement TEXT;
+  ADD COLUMN IF NOT EXISTS emplacement TEXT,
+  ADD COLUMN IF NOT EXISTS demandeur TEXT;
 
 -- ── 3. RAPPORT : emplacement, photos annexe, flux interne ───
 ALTER TABLE rapports_regie

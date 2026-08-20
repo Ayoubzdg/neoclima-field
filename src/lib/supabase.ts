@@ -322,6 +322,22 @@ export async function getTasksDuJour(equipeId: string, date: string): Promise<Ta
   return (data ?? []) as Task[]
 }
 
+/**
+ * Tâches NON CLÔTURÉES des semaines passées (retards à rattraper).
+ * Tout ce qui est planifié avant `beforeISO` et pas encore validé.
+ */
+export async function getTasksNonCloturees(equipeId: string, beforeISO: string): Promise<Task[]> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*, equipe:equipes(*), zone_takt:zones_takt(*), phases:task_phases(*), contraintes(*)')
+    .eq('equipe_id', equipeId)
+    .lt('date_planifiee', beforeISO)
+    .neq('status', 'done')
+    .order('date_planifiee')
+  if (error) handleError(error, 'getTasksNonCloturees')
+  return (data ?? []) as Task[]
+}
+
 export async function getTasksByZone(
   zoneTaktId: string,
   filters?: { equipeId?: string; semaine?: string }

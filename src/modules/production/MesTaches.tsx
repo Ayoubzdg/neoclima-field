@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle, AlertCircle, Clock, Play, Plus, Minus, AlertTriangle, ChevronRight, Moon, QrCode, Users, RotateCcw } from 'lucide-react'
+import { CheckCircle, AlertCircle, Clock, Play, Plus, Minus, AlertTriangle, ChevronRight, ChevronLeft, Moon, QrCode, Users, RotateCcw } from 'lucide-react'
 import { useProductionStore } from '@/store/productionStore'
 import { useAuthStore } from '@/store/authStore'
+import { getTasksNonCloturees } from '@/lib/supabase'
 import { currentMondayISO, formatDateFR, todayISO, addDays, formatDateISO, getSemaineLabel } from '@/utils/dates'
 import { nextStatus, isTermine, PRIORITY_ORDER, STATUS_LABELS } from '@/utils/statusMachine'
 import ProgressBar from '@/components/ui/ProgressBar'
@@ -75,7 +76,17 @@ export default function MesTaches() {
   const { equipe, role, utilisateur } = useAuthStore()
   const { tasksDuJour, isLoading, error, loadTasksDuJour, updateStatus, updateQty, signalerBlocage } = useProductionStore()
   const today = todayISO()
-  const monday = currentMondayISO()
+  const mondayCourant = currentMondayISO()
+
+  // Navigation par semaine : 0 = courante, +1 = suivante…
+  // Le monteur bloqué peut piocher une tâche des semaines à venir.
+  const [weekOffset, setWeekOffset] = useState(0)
+  const monday = weekOffset === 0
+    ? mondayCourant
+    : formatDateISO(addDays(new Date(mondayCourant), weekOffset * 7))
+
+  // Retards : tâches des semaines passées non clôturées
+  const [retards, setRetards] = useState<Task[]>([])
 
   const [blocageTask, setBlocageTask] = useState<Task | null>(null)
   const [showWizard, setShowWizard] = useState(false)
@@ -86,6 +97,13 @@ export default function MesTaches() {
       loadTasksDuJour(equipe.id, monday)
     }
   }, [equipe?.id, monday, loadTasksDuJour])
+
+  const loadRetards = useCallback(() => {
+    if (!equipe?.id) return
+    getTasksNonCloturees(equipe.id, mondayCourant).then(setRetards).catch(() => {})
+  }, [equipe?.id, mondayCourant])
+
+  useEffect(() => { loadRetards() }, [loadRetards])
 
   // Rediriger chef/chef d'équipe/CA vers le dashboard approprié
   useEffect(() => {
@@ -111,6 +129,7 @@ export default function MesTaches() {
     if (next === 'en_cours' && !task.date_debut_reel) updates.date_debut_reel = new Date().toISOString()
     if (next === 'a_controler' && task.status === 'en_cours') updates.date_fin_reel = new Date().toISOString()
     await updateStatus(task.id, next, updates, role ?? 'monteur')
+    loadRetards() // la section retards reflète le changement
   }
 
   const handleQtyChange = async (task: Task, delta: number) => {
@@ -121,6 +140,7 @@ export default function MesTaches() {
     const effectiveDelta = newQte - task.qte_realisee
     if (effectiveDelta === 0) return
     await updateQty(task.id, effectiveDelta, role ?? 'monteur')
+    loadRetards()
   }
 
   const handleBlocageSubmit = async (type: ContrainteType, comment: string) => {
@@ -128,6 +148,7 @@ export default function MesTaches() {
     // Point d'entrée unifié : statut + contrainte + historique
     await signalerBlocage(blocageTask, type, comment, role ?? 'monteur')
     setBlocageTask(null)
+    loadRetards()
   }
 
   if (isLoading) {
@@ -163,10 +184,41 @@ export default function MesTaches() {
   return (
     <div className="p-4 max-w-lg mx-auto pb-28">
 
-      {/* Header semaine */}
+      {/* Header semaine — navigation ‹ › */}
       <div className="mb-5">
-        <h2 className="text-base font-bold text-nc-blue">{getSemaineLabel(monday)}</h2>
-        <p className="text-gray-400 text-xs mt-0.5">{formatDateFR(today)}</p>
+        <div className="flex items-center justify-between">
+          <button onClick={() => setWeekOffset(o => o - 1)}
+            className="p-2 rounded-xl hover:bg-gray-100 active:scale-90 transition-all touch-manipulation">
+            <ChevronLeft size={18} className="text-gray-400" />
+          </button>
+          <div className="text-center">
+            <h2 className="text-base font-bold text-nc-blue flex items-center justify-center gap-2">
+              {getSemaineLabel(monday)}
+              {weekOffset > 0 && (
+                <span className="text-[10px] font-bold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md uppercase">à venir</span>
+              )}
+              {weekOffset < 0 && (
+                <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md uppercase">passée</span>
+              )}
+            </h2>
+            {weekOffset === 0 ? (
+              <p className="text-gray-400 text-xs mt-0.5">{formatDateFR(today)}</p>
+            ) : (
+              <button onClick={() => setWeekOffset(0)} className="text-xs text-nc-red font-medium mt-0.5">
+                ↩ Revenir à cette semaine
+              </button>
+            )}
+          </div>
+          <button onClick={() => setWeekOffset(o => o + 1)}
+            className="p-2 rounded-xl hover:bg-gray-100 active:scale-90 transition-all touch-manipulation">
+            <ChevronRight size={18} className="text-gray-400" />
+          </button>
+        </div>
+        {weekOffset > 0 && (
+          <p className="text-[11px] text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1.5 mt-2">
+            Bloqué sur tes tâches ? Tu peux avancer sur une tâche d'une semaine à venir.
+          </p>
+        )}
 
         {/* Résumé statuts */}
         <div className="flex items-center gap-3 mt-2 text-sm">
@@ -217,6 +269,30 @@ export default function MesTaches() {
         )
       })()}
 
+      {/* ── À rattraper : non clôturé des semaines passées ── */}
+      {weekOffset === 0 && retards.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-bold text-red-600 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <Clock size={13} />À rattraper — {retards.length} tâche{retards.length > 1 ? 's' : ''} non clôturée{retards.length > 1 ? 's' : ''}
+          </p>
+          <div className="space-y-3">
+            {retards.map(task => (
+              <div key={task.id}>
+                <p className="text-[10px] text-gray-400 mb-0.5 ml-1">Planifiée {getSemaineLabel(task.date_planifiee ?? mondayCourant)}</p>
+                <InlineTaskCard
+                  task={task}
+                  onStatusCycle={() => handleStatusCycle(task)}
+                  onQtyChange={(delta) => handleQtyChange(task, delta)}
+                  onBlocage={() => setBlocageTask(task)}
+                  onDetail={() => navigate(`/production/tache/${task.id}`)}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-gray-100 mt-4" />
+        </div>
+      )}
+
       {/* Liste des tâches */}
       {sorted.length === 0 && error ? (
         /* Erreur réseau ≠ "rien à faire" — distinction cruciale */
@@ -233,8 +309,12 @@ export default function MesTaches() {
       ) : sorted.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <CheckCircle size={40} className="mx-auto mb-3 opacity-40" />
-          <p className="font-medium text-gray-500">Aucune tâche planifiée cette semaine</p>
-          <p className="text-sm mt-1 text-gray-400">Contacte ton chef de chantier</p>
+          <p className="font-medium text-gray-500">
+            {weekOffset === 0 ? 'Aucune tâche planifiée cette semaine' : 'Aucune tâche planifiée cette semaine-là'}
+          </p>
+          <p className="text-sm mt-1 text-gray-400">
+            {weekOffset === 0 ? 'Contacte ton chef de chantier' : 'Navigue avec les flèches ‹ ›'}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -251,8 +331,8 @@ export default function MesTaches() {
         </div>
       )}
 
-      {/* Bouton clôture journée (principal) */}
-      {tasksDuJour.length > 0 && (
+      {/* Bouton clôture journée (semaine courante uniquement) */}
+      {weekOffset === 0 && tasksDuJour.length > 0 && (
         <button
           onClick={() => setShowWizard(true)}
           className="mt-5 w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl

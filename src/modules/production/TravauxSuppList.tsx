@@ -107,6 +107,7 @@ export default function TravauxSuppList() {
         chantier_id: chantier.id,
         travaux_supp_id: t.id,
         client: chantier.client ?? null,
+        demandeur: t.demandeur ?? null,
         emplacement: t.emplacement ?? t.zone_takt?.name ?? null,
         description: `${t.zone_takt?.name ? `${t.zone_takt.name} — ` : ''}${t.description}`,
         lignes: [{ ref: '', nombre: 1, fonction: 'monteur',
@@ -162,6 +163,7 @@ export default function TravauxSuppList() {
                     <p className="text-sm text-gray-700 leading-snug">{t.description}</p>
                     <p className="text-[10px] text-gray-400 mt-1">
                       {formatDateShort(t.created_at)} · {t.cree_par ?? t.cree_par_role ?? '?'}
+                      {t.demandeur && <span className="text-nc-blue"> · demandé par {t.demandeur}</span>}
                       {t.heures_estimees != null && <span className="text-nc-blue font-medium"> · ~{t.heures_estimees} h</span>}
                       {t.valide_ca_par && <span> · autorisé par {t.valide_ca_par}</span>}
                       {t.motif_refus && <span className="text-red-500"> · refus : {t.motif_refus}</span>}

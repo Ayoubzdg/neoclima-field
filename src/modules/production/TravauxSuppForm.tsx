@@ -22,6 +22,7 @@ export default function TravauxSuppForm({ onClose, onCreated }: Props) {
   const [zones, setZones] = useState<ZoneTakt[]>([])
   const [zoneId, setZoneId] = useState('')
   const [emplacement, setEmplacement] = useState('')
+  const [demandeur, setDemandeur] = useState('')
   const [description, setDescription] = useState('')
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
@@ -57,6 +58,7 @@ export default function TravauxSuppForm({ onClose, onCreated }: Props) {
         zone_takt_id: zoneId || null,
         entreprise_id: entrepriseId ?? null,
         emplacement: emplacement.trim(),
+        demandeur: demandeur.trim() || null,
         description: description.trim(),
         photo_url: photoUrl,
         statut: 'signale',
@@ -134,6 +136,17 @@ export default function TravauxSuppForm({ onClose, onCreated }: Props) {
               value={emplacement}
               onChange={e => setEmplacement(e.target.value)}
               placeholder="Ex : N3, local 3.081, axe 12 — au-dessus du faux plafond"
+              className="input-field"
+            />
+          </div>
+
+          {/* Demandeur — qui a demandé ces travaux (repris sur le bon de régie) */}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-1.5">Qui a demandé ces travaux ?</p>
+            <input
+              value={demandeur}
+              onChange={e => setDemandeur(e.target.value)}
+              placeholder="Ex : M. Dupont (Implenia), architecte, direction de travaux…"
               className="input-field"
             />
           </div>

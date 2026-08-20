@@ -352,6 +352,8 @@ export interface TravauxSupp {
   description: string
   /** Emplacement exact désigné par le monteur (ex : "N3, local 3.081, axe 12") */
   emplacement: string | null
+  /** Qui a demandé les travaux (saisi par le monteur, repris sur le bon de régie) */
+  demandeur: string | null
   photo_url: string | null
   statut: TravauxSuppStatut
   heures_estimees: number | null

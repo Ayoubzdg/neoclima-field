@@ -155,6 +155,12 @@ export function RegieEdit() {
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
+      return true
+    } catch (e) {
+      // Erreur visible au lieu d'un échec silencieux (ex : colonne
+      // manquante si le script regie-v2.sql n'a pas été exécuté)
+      alert(`Enregistrement impossible : ${e instanceof Error ? e.message : 'erreur inconnue'}\n\nSi le message mentionne une colonne (photos, emplacement, flux…), exécute supabase/regie-v2.sql dans le SQL Editor.`)
+      return false
     } finally {
       setIsSaving(false)
     }
@@ -165,8 +171,8 @@ export function RegieEdit() {
       alert('Impression impossible : le nom du DEMANDEUR est obligatoire.')
       return
     }
-    await save()
-    window.print()
+    const ok = await save()
+    if (ok) window.print()
   }
 
   // Ajout d'une photo à l'annexe (compressée puis stockée)
