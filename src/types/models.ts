@@ -361,6 +361,31 @@ export interface TravauxSupp {
   zone_takt?: ZoneTakt
 }
 
+// ── Rapport de régie ────────────────────────────────────────
+
+export interface LigneRegie {
+  ref: string          // ex : "20/03 — P09 démontage"
+  nombre: number       // nombre d'ouvriers
+  fonction: string     // ex : "monteur", "aide-monteur"
+  heures: number
+  heures_supp: number
+}
+
+export interface RapportRegie {
+  id: string
+  numero: number
+  chantier_id: string
+  travaux_supp_id: string | null
+  date_rapport: string
+  client: string | null
+  description: string | null
+  lignes: LigneRegie[]
+  materiel: string | null
+  cree_par: string | null
+  created_at: string
+  updated_at: string
+}
+
 // ── Effectif ────────────────────────────────────────────────
 
 export interface Effectif {

@@ -4,7 +4,7 @@ import type {
   Contrainte, NonConformite, Mesure, Photo, TaskHistory,
   Effectif, Equipe, Utilisateur, WeeklyPlan, TaskType,
   PlanVersion, Materiau, VueAvancementZone,
-  Entreprise, Personne, AccesChantier, LoginPersonneResult, TravauxSupp
+  Entreprise, Personne, AccesChantier, LoginPersonneResult, TravauxSupp, RapportRegie
 } from '@/types/models'
 
 // ── Client Supabase ─────────────────────────────────────────
@@ -843,6 +843,43 @@ export async function getEffectifsAll(chantierId: string): Promise<Effectif[]> {
     .order('date', { ascending: true })
   if (error) handleError(error, 'getEffectifsAll')
   return (data ?? []) as Effectif[]
+}
+
+// ── RAPPORTS DE RÉGIE ───────────────────────────────────────
+
+export async function getRapportsRegie(chantierId: string): Promise<RapportRegie[]> {
+  const { data, error } = await supabase
+    .from('rapports_regie')
+    .select('*')
+    .eq('chantier_id', chantierId)
+    .order('numero', { ascending: false })
+  if (error) handleError(error, 'getRapportsRegie')
+  return (data ?? []) as RapportRegie[]
+}
+
+export async function getRapportRegie(id: string): Promise<RapportRegie | null> {
+  const { data, error } = await supabase
+    .from('rapports_regie').select('*').eq('id', id).single()
+  if (error) return null
+  return data as RapportRegie
+}
+
+export async function createRapportRegie(r: Partial<RapportRegie>): Promise<RapportRegie> {
+  const { data, error } = await supabase
+    .from('rapports_regie').insert(r).select().single()
+  if (error) handleError(error, 'createRapportRegie')
+  return data as RapportRegie
+}
+
+export async function updateRapportRegie(id: string, updates: Partial<RapportRegie>): Promise<RapportRegie> {
+  const { data, error } = await supabase
+    .from('rapports_regie')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) handleError(error, 'updateRapportRegie')
+  return data as RapportRegie
 }
 
 // ── TRAVAUX SUPPLÉMENTAIRES ─────────────────────────────────

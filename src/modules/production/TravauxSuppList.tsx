@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  Zap, CheckCircle, XCircle, Clock, Loader2, RefreshCw, HardHat, Briefcase
+  Zap, CheckCircle, XCircle, Clock, Loader2, RefreshCw, HardHat, Briefcase, FileSignature
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { getTravauxSupp, updateTravauxSupp } from '@/lib/supabase'
+import { getTravauxSupp, updateTravauxSupp, createRapportRegie } from '@/lib/supabase'
 import { formatDateShort } from '@/utils/dates'
 import SecureImage from '@/components/ui/SecureImage'
 import type { TravauxSupp, TravauxSuppStatut } from '@/types/models'
@@ -22,6 +23,7 @@ const STATUT_META: Record<TravauxSuppStatut, { label: string; cls: string }> = {
  * CA : autorise ou refuse (motif). Rien ne se réalise sans lui.
  */
 export default function TravauxSuppList() {
+  const navigate = useNavigate()
   const { chantier, role, utilisateur, entrepriseId } = useAuthStore()
   const [items, setItems] = useState<TravauxSupp[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -78,6 +80,26 @@ export default function TravauxSuppList() {
   const marquerRealise = (t: TravauxSupp) =>
     applyUpdate(t.id, { statut: 'realise' })
 
+  // Génère un rapport de régie prérempli depuis ce travail supp
+  const creerRegie = async (t: TravauxSupp) => {
+    if (!chantier?.id) return
+    setBusyId(t.id)
+    try {
+      const r = await createRapportRegie({
+        chantier_id: chantier.id,
+        travaux_supp_id: t.id,
+        client: chantier.client ?? null,
+        description: `${t.zone_takt?.name ? `${t.zone_takt.name} — ` : ''}${t.description}`,
+        lignes: [{ ref: '', nombre: 1, fonction: 'monteur',
+                   heures: t.heures_estimees ?? 0, heures_supp: 0 }],
+        cree_par: nom,
+      })
+      navigate(`/reporting/regie/${r.id}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const enAttente = items.filter(t => t.statut === 'signale' || t.statut === 'valide_cc')
   const autorises = items.filter(t => t.statut === 'valide_ca')
   const clos = items.filter(t => t.statut === 'realise' || t.statut === 'refuse')
@@ -118,7 +140,7 @@ export default function TravauxSuppList() {
                 </div>
 
                 {/* Actions selon rôle + statut */}
-                {(isChef || (t.statut === 'valide_ca' && (isST || role === 'monteur'))) && t.statut !== 'realise' && t.statut !== 'refuse' && (
+                {(isChef || (t.statut === 'valide_ca' && (isST || role === 'monteur'))) && t.statut !== 'refuse' && (t.statut !== 'realise' || isChef) && (
                   <div className="border-t border-gray-50 px-3 py-2 flex gap-2 justify-end flex-wrap">
                     {t.statut === 'signale' && isChef && (
                       <>
@@ -150,6 +172,12 @@ export default function TravauxSuppList() {
                       <span className="text-[10px] text-gray-400 py-1.5 flex items-center gap-1">
                         <Clock size={11} /> En attente de validation du chargé d'affaires
                       </span>
+                    )}
+                    {(t.statut === 'valide_ca' || t.statut === 'realise') && isChef && (
+                      <button onClick={() => creerRegie(t)} disabled={busy}
+                        className="px-2.5 py-1.5 rounded-lg border border-nc-blue/30 text-nc-blue text-xs font-medium hover:bg-blue-50 disabled:opacity-40">
+                        <FileSignature size={12} className="inline mr-1" />Rapport de régie
+                      </button>
                     )}
                     {t.statut === 'valide_ca' && (
                       <button onClick={() => marquerRealise(t)} disabled={busy}
