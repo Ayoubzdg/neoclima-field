@@ -5,6 +5,7 @@ import { getTasksByChantier, getEffectifs, getNonConformites } from '@/lib/supab
 import { calculerPPC, calculerAvancementMixte, getPpcColor } from '@/utils/ppc'
 import { currentMondayISO, getSemaineLabel, addWeeks, formatDateISO } from '@/utils/dates'
 import ProgressBar from '@/components/ui/ProgressBar'
+import SyntheseIA from './SyntheseIA'
 import type { Task, Effectif, NonConformite } from '@/types/models'
 
 const RAPPORT_SERVICE_URL = import.meta.env.VITE_RAPPORT_SERVICE_URL ?? ''
@@ -269,6 +270,35 @@ export default function RapportHebdo() {
         </div>
       ) : stats ? (
         <>
+          {/* Synthèse IA — rédigée depuis les chiffres de la semaine */}
+          <div className="mb-4">
+            <SyntheseIA
+              type="hebdo"
+              chantier={chantier?.name ?? ''}
+              periode={getSemaineLabel(semaine)}
+              donnees={{
+                ppc_pct: stats.ppc,
+                taches_engagees: stats.tasksEngagees,
+                taches_engagees_realisees: stats.tasksRealisees,
+                avancement_pct: stats.avancement,
+                taches_semaine: stats.tasks.length,
+                taches_terminees: stats.tasks.filter(t => t.status === 'done').length,
+                blocages: stats.blocages.map(t => ({
+                  tache: t.label,
+                  zone: t.zone_takt?.name ?? null,
+                  cause: t.type_blocage ?? null,
+                })),
+                effectif: {
+                  presents: stats.totalPresents,
+                  prevus: stats.totalPrevus,
+                  heures_produites: stats.totalHeures,
+                },
+                nc_ouvertes: stats.ncs.filter(n => n.statut === 'ouverte' || n.statut === 'en_cours').length,
+                nc_bloquantes: stats.ncs.filter(n => n.gravite === 'bloquante').length,
+              }}
+            />
+          </div>
+
           {/* KPIs */}
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm col-span-2 flex items-center justify-between">

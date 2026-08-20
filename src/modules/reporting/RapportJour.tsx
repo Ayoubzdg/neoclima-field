@@ -8,6 +8,7 @@ import {
   getTasksByChantier, getEquipes, getEffectifs, getNonConformites, getTravauxSupp
 } from '@/lib/supabase'
 import { todayISO, currentMondayISO, formatDateFR } from '@/utils/dates'
+import SyntheseIA from './SyntheseIA'
 import type { Task, Equipe, Effectif, NonConformite, TravauxSupp } from '@/types/models'
 
 /**
@@ -138,6 +139,34 @@ export default function RapportJour() {
       </div>
 
       <div className="space-y-3">
+        {/* Synthèse IA — rédigée depuis les chiffres ci-dessous */}
+        <SyntheseIA
+          type="jour"
+          chantier={chantier?.name ?? ''}
+          periode={formatDateFR(today)}
+          donnees={{
+            personnel: {
+              presents, prevus,
+              equipes_incompletes: equipesManquantes,
+              effectifs_declares: effectifs.length > 0,
+            },
+            production: {
+              validees_aujourdhui: valideesAujourdhui,
+              terminees_declarees: declareesAujourdhui,
+              stock_a_controler: stockAControler,
+            },
+            blocages: bloquees.map(t => ({
+              tache: t.label,
+              zone: t.zone_takt?.name ?? null,
+              cause: t.type_blocage ?? null,
+              plus_de_48h: bloqueesVieilles.some(b => b.id === t.id),
+            })),
+            reserves: { ouvertes: ncOuvertes.length, fermees_aujourdhui: ncFermeesAujourdhui },
+            retards_par_zone: retardsParZone.map(([zone, n]) => ({ zone, taches_en_retard: n })),
+            decisions_en_attente: decisions,
+          }}
+        />
+
         {/* Personnel */}
         <Bloc icon={<Users size={13} />} title="Personnel">
           <p className="text-2xl font-black text-nc-blue">

@@ -1185,6 +1185,35 @@ export async function loginPersonne(
  * Retourne null si la fonction n'est pas (encore) déployée →
  * l'appelant retombe sur le RPC loginPersonne (transition).
  */
+/**
+ * Synthèse IA d'un rapport (jour/hebdo) via l'Edge Function rapport-ia.
+ * Lève une erreur explicite si la fonction n'est pas déployée.
+ */
+export async function genererSyntheseIA(payload: {
+  type: 'jour' | 'hebdo'
+  chantier: string
+  periode: string
+  donnees: unknown
+}): Promise<string> {
+  const res = await fetch(`${supabaseUrl}/functions/v1/rapport-ia`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': supabaseAnonKey,
+      'Authorization': `Bearer ${sessionToken ?? supabaseAnonKey}`,
+    },
+    body: JSON.stringify(payload),
+  })
+  if (res.status === 404) {
+    throw new Error("La fonction rapport-ia n'est pas déployée — voir RAPPORT-IA-DEPLOIEMENT.md")
+  }
+  const json = await res.json().catch(() => ({})) as { texte?: string; error?: string }
+  if (!res.ok || !json.texte) {
+    throw new Error(json.error ?? `Erreur HTTP ${res.status}`)
+  }
+  return json.texte
+}
+
 export async function loginPersonneEdge(
   codeEntreprise: string,
   codePin: string
