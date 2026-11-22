@@ -11,31 +11,11 @@ import {
 } from '@/lib/supabase'
 import { currentMondayISO, formatDateFR, todayISO } from '@/utils/dates'
 import type { Task, Entreprise, Effectif, ZoneTakt, TravauxSupp, Equipe } from '@/types/models'
+import { HEURES_PAR_JOUR_EQUIPE, pctDeclare, pctValide, agreger } from '@/utils/avancement'
 
 const SYSTEME_LABELS: Record<string, string> = {
   soufflage: 'Soufflage', extraction: 'Extraction', desenfumage: 'Désenfumage',
   reprise: 'Reprise', air_neuf: 'Air neuf', autre: 'Autre',
-}
-
-/** 1 équipe = 2 monteurs × 8 h → 1 jour-équipe = 16 h */
-const HEURES_PAR_JOUR_EQUIPE = 16
-
-/** Poids d'une tâche = ses heures prévues (fallback 1 si non chiffrée) */
-const poids = (t: Task) => t.heures_prevues > 0 ? t.heures_prevues : 1
-
-/** Avancement déclaré d'une tâche (0..1) : quantités si chiffrées, sinon statut */
-const pctDeclare = (t: Task) => {
-  if (t.qte_prevue > 0) return Math.min(1, t.qte_realisee / t.qte_prevue)
-  return (t.status === 'done' || t.status === 'a_controler') ? 1 : 0
-}
-
-/** Avancement VALIDÉ (0..1) : seul le statut done compte — base des situations */
-const pctValide = (t: Task) => t.status === 'done' ? 1 : 0
-
-function agreger(tasks: Task[], fn: (t: Task) => number): number {
-  const totalW = tasks.reduce((s, t) => s + poids(t), 0)
-  if (totalW === 0) return 0
-  return Math.round((tasks.reduce((s, t) => s + poids(t) * fn(t), 0) / totalW) * 100)
 }
 
 /**
@@ -367,6 +347,13 @@ export default function DashboardCA() {
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
             <Clock size={13} />Heures cumulées & productivité
           </p>
+          <button
+            onClick={() => navigate('/reporting/main-oeuvre')}
+            className="w-full flex items-center justify-between text-xs font-medium text-nc-blue bg-blue-50 rounded-lg px-3 py-2 mb-3"
+          >
+            Détail par zone, par entreprise et heures perdues
+            <ChevronRight size={14} />
+          </button>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
               <p className="text-xl font-black text-nc-blue">{heuresProduites}<span className="text-xs text-gray-400 font-medium"> h</span></p>

@@ -60,6 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Reporting',
     items: [
       { to: '/reporting/dashboard-ca',  icon: <BarChart3 size={18} />,    label: 'Dashboard CA',     roles: ['ca', 'admin'] },
+      { to: '/reporting/main-oeuvre',   icon: <HardHat size={18} />,      label: "Main-d'œuvre",     roles: ['ca', 'admin'] },
       { to: '/reporting/jour',          icon: <Calendar size={18} />,     label: 'Rapport du jour',  roles: ['chef', 'ca', 'admin'] },
       { to: '/reporting',               icon: <BarChart3 size={18} />,    label: 'Rapport hebdo',    roles: ['ca', 'admin'] },
       { to: '/reporting/bon-travail',   icon: <ClipboardList size={18} />,label: 'Bon de travail',   roles: ['chef', 'ca', 'admin'] },

@@ -47,6 +47,7 @@ import Effectifs from '@/modules/equipes/Effectifs'
 import RapportHebdo from '@/modules/reporting/RapportHebdo'
 import RapportJour from '@/modules/reporting/RapportJour'
 import DashboardCA from '@/modules/reporting/DashboardCA'
+import MainOeuvre from '@/modules/reporting/MainOeuvre'
 import { RegieList, RegieEdit } from '@/modules/reporting/RapportsRegie'
 import BonTravail from '@/modules/reporting/BonTravail'
 
@@ -111,6 +112,7 @@ export const router = createBrowserRouter([
       { path: 'reporting', element: guard(['ca', 'admin'], <RapportHebdo />) },
       { path: 'reporting/jour', element: guard(['chef', 'ca', 'admin'], <RapportJour />) },
       { path: 'reporting/dashboard-ca', element: guard(['ca', 'admin'], <DashboardCA />) },
+      { path: 'reporting/main-oeuvre', element: guard(['ca', 'admin'], <MainOeuvre />) },
       { path: 'reporting/regie', element: guard(['chef', 'ca', 'admin'], <RegieList />) },
       { path: 'reporting/regie/:id', element: guard(['chef', 'ca', 'admin'], <RegieEdit />) },
       { path: 'reporting/bon-travail', element: guard(['chef', 'ca', 'admin'], <BonTravail />) },
