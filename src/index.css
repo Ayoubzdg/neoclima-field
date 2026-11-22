@@ -118,3 +118,15 @@
 
 .animate-slide-up { animation: slideUp 0.25s ease-out; }
 .animate-fade-in  { animation: fadeIn 0.2s ease-out; }
+
+/* ── Impression : uniquement le contenu, sur autant de pages que nécessaire ── */
+@media print {
+  .app-chrome { display: none !important; }
+  .app-shell, .app-main {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding-bottom: 0 !important;
+  }
+  .app-shell { background: #fff !important; }
+}

@@ -17,9 +17,9 @@ export default function Layout() {
   useRealtime(chantierId)
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="app-shell flex h-screen overflow-hidden bg-gray-50">
       {/* ── Sidebar desktop ──────────────────────────── */}
-      <div className="hidden md:block flex-shrink-0">
+      <div className="app-chrome hidden md:block flex-shrink-0">
         <Sidebar />
       </div>
 
@@ -39,13 +39,16 @@ export default function Layout() {
       )}
 
       {/* ── Contenu principal ────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <TopBar />
-        <OfflineBadge />
-        <main className={`flex-1 overflow-y-auto ${isMonteur ? 'pb-20' : 'pb-4'}`}>
+      <div className="app-main flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* display:contents → aucun effet à l'écran ; masqué à l'impression */}
+        <div className="app-chrome contents">
+          <TopBar />
+          <OfflineBadge />
+        </div>
+        <main className={`app-main flex-1 overflow-y-auto ${isMonteur ? 'pb-20' : 'pb-4'}`}>
           <Outlet />
         </main>
-        <div className="md:hidden">
+        <div className="app-chrome md:hidden">
           <BottomNav />
         </div>
       </div>

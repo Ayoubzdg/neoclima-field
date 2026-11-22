@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/authStore'
 import { getEquipes, getEffectifs, upsertEffectif, getTasksByChantier } from '@/lib/supabase'
 import { todayISO, formatDateFR, getMonday, formatDateISO } from '@/utils/dates'
 import type { Equipe, Effectif, ZoneTakt } from '@/types/models'
-import { Save, ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { Save, ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp, CheckCircle, AlertTriangle } from 'lucide-react'
 import VentilationHeures from './VentilationHeures'
 
 export default function Effectifs() {
@@ -13,6 +13,10 @@ export default function Effectifs() {
   const [date, setDate] = useState(todayISO())
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
+  // L'encadrement VALIDE les présents (base de facturation des
+  // sous-traitants) ; le terrain ne fait que les proposer.
+  const peutValider = role === 'chef' || role === 'ca' || role === 'admin'
   const [localEffectifs, setLocalEffectifs] = useState<Record<string, { prevus: number; presents: number; heures: number }>>({})
   // Équipe dont la ventilation des heures est dépliée
   const [ventilationOuverte, setVentilationOuverte] = useState<string | null>(null)
@@ -64,9 +68,19 @@ export default function Effectifs() {
   const handleSave = async () => {
     if (!chantier?.id) return
     setIsSaving(true)
+    setErreur(null)
     try {
-      await Promise.all(
-        equipes.map(e =>
+      // allSettled : une équipe refusée (mois clôturé, déjà validée)
+      // ne doit pas empêcher l'enregistrement des autres
+      // Une équipe jamais déclarée et laissée à zéro n'est PAS enregistrée :
+      // sinon la validation du chef créerait une ligne « 0 présent validé »
+      // qui bloquerait la déclaration du monteur en fin de journée.
+      const aEnregistrer = equipes.filter(e =>
+        effectifs.some(x => x.equipe_id === e.id)
+        || (localEffectifs[e.id]?.presents ?? 0) > 0
+        || (localEffectifs[e.id]?.prevus ?? 0) > 0)
+      const resultats = await Promise.allSettled(
+        aEnregistrer.map(e =>
           upsertEffectif({
             chantier_id: chantier.id,
             equipe_id: e.id,
@@ -77,6 +91,16 @@ export default function Effectifs() {
           })
         )
       )
+      const echecs = resultats
+        .map((r, i) => r.status === 'rejected'
+          ? `${aEnregistrer[i].name} : ${String(r.reason instanceof Error ? r.reason.message : r.reason).replace(/^\[Supabase [^\]]+\]\s*/, '')}`
+          : null)
+        .filter(Boolean)
+      if (echecs.length > 0) setErreur(echecs.join(' · '))
+      // Recharger : affiche l'état réel (validé par qui, valeurs conservées)
+      setEffectifs(await getEffectifs(chantier.id, date))
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : String(e))
     } finally {
       setIsSaving(false)
     }
@@ -117,7 +141,21 @@ export default function Effectifs() {
             <div key={equipe.id} className="bg-white rounded-xl border border-gray-100 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: equipe.couleur }} />
-                <p className="font-semibold text-nc-blue text-sm">{equipe.name}</p>
+                <p className="font-semibold text-nc-blue text-sm flex-1 truncate">{equipe.name}</p>
+                {(() => {
+                  const ef = effectifs.find(x => x.equipe_id === equipe.id)
+                  if (!ef) return <span className="text-[10px] text-gray-400">non déclaré</span>
+                  if (ef.valide_at) return (
+                    <span className="flex items-center gap-1 text-[10px] font-medium text-green-600">
+                      <CheckCircle size={12} />validé{ef.valide_par ? ` · ${ef.valide_par}` : ''}
+                    </span>
+                  )
+                  return (
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">
+                      {peutValider ? 'à valider' : 'en attente de validation'}
+                    </span>
+                  )
+                })()}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -188,14 +226,26 @@ export default function Effectifs() {
         </div>
       )}
 
+      {erreur && (
+        <div className="flex items-start gap-2 bg-red-50 text-red-700 rounded-xl px-3 py-2 text-sm mt-4">
+          <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+          <span>{erreur}</span>
+        </div>
+      )}
+
       <button
         onClick={handleSave}
         disabled={isSaving}
         className="w-full btn-primary mt-5 flex items-center justify-center gap-2"
       >
         <Save size={18} />
-        {isSaving ? 'Sauvegarde…' : 'Sauvegarder les effectifs'}
+        {isSaving ? 'Sauvegarde…' : peutValider ? 'Valider les présents du jour' : 'Sauvegarder les effectifs'}
       </button>
+      {peutValider && (
+        <p className="text-[11px] text-gray-400 text-center mt-2">
+          Valider fige les présents de toutes les équipes pour ce jour : le terrain ne peut plus les modifier.
+        </p>
+      )}
     </div>
   )
 }

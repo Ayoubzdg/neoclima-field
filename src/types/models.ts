@@ -422,6 +422,9 @@ export interface Effectif {
   /** Heures travaillées ce jour (défaut 8) — heures réalisées = présents × heures_jour */
   heures_jour: number
   note: string | null
+  /** Validation par l'encadrement — seuls les présents validés sont facturables */
+  valide_par?: string | null
+  valide_at?: string | null
   // Relations
   equipe?: Equipe
 }
@@ -557,6 +560,51 @@ export interface Entreprise {
   code_acces: string   // Toujours en MAJUSCULES dans la DB
   actif: boolean
   created_at: string
+  // Fiche de facturation
+  raison_sociale?: string | null
+  adresse?: string | null
+  npa_localite?: string | null
+  contact_nom?: string | null
+  contact_email?: string | null
+}
+
+// ── Facturation des sous-traitants ──────────────────────────
+
+/** Tarif d'une entreprise sur un chantier (pas de tarif = non facturée) */
+export interface TarifFacturation {
+  id: string
+  entreprise_id: string
+  chantier_id: string
+  facturable: boolean
+  /** 'monteur' : prix × présents · 'equipe' : prix × équipe présente */
+  unite: 'monteur' | 'equipe'
+  prix_jour: number
+  /** Jours facturés max par équipe et par mois (null = pas de plafond) */
+  plafond_jours_mois: number | null
+  /** Dégressif : au-delà de N unités le même jour → prix réduit (null = désactivé) */
+  degressif_seuil: number | null
+  degressif_prix: number | null
+  /** Sous ce total, le relevé est reporté au mois suivant */
+  seuil_facturation: number
+  date_debut: string | null
+  created_at: string
+}
+
+/** Mois clôturé — sa présence verrouille les effectifs du mois */
+export interface ReleveFacturation {
+  id: string
+  entreprise_id: string
+  chantier_id: string
+  /** Premier jour du mois (YYYY-MM-01) */
+  mois: string
+  statut: 'a_facturer' | 'reporte'
+  unites: number
+  montant_mois: number
+  report_anterieur: number
+  total: number
+  detail: unknown
+  cloture_par: string | null
+  cloture_at: string
 }
 
 // ── Personne ────────────────────────────────────────────────

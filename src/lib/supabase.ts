@@ -4,6 +4,7 @@ import type {
   Contrainte, NonConformite, Mesure, Photo, TaskHistory,
   Effectif, Equipe, Utilisateur, WeeklyPlan, TaskType,
   PlanVersion, Materiau, VueAvancementZone, HeureZone, HeureZoneLigne,
+  TarifFacturation, ReleveFacturation,
   Entreprise, Personne, AccesChantier, LoginPersonneResult, TravauxSupp, RapportRegie
 } from '@/types/models'
 
@@ -875,6 +876,66 @@ export async function enregistrerHeuresZone(
   const { error } = await supabase.rpc(
     'enregistrer_heures_zone', argsHeuresZone(chantierId, equipeId, date, lignes, saisiPar))
   if (error) handleError(error, 'enregistrerHeuresZone')
+}
+
+// ── FACTURATION DES SOUS-TRAITANTS ──────────────────────────
+
+/** Effectifs du chantier sur une période (bornes incluses) */
+export async function getEffectifsPeriode(chantierId: string, du: string, au: string): Promise<Effectif[]> {
+  return fetchAll<Effectif>(() => supabase
+    .from('effectifs')
+    .select('*')
+    .eq('chantier_id', chantierId)
+    .gte('date', du)
+    .lte('date', au)
+    .order('date', { ascending: true })
+    .order('id'), 'getEffectifsPeriode')
+}
+
+export async function getTarifs(chantierId: string): Promise<TarifFacturation[]> {
+  const { data, error } = await supabase
+    .from('tarifs_facturation')
+    .select('*')
+    .eq('chantier_id', chantierId)
+  if (error) handleError(error, 'getTarifs')
+  return (data ?? []) as TarifFacturation[]
+}
+
+export async function upsertTarif(tarif: Partial<TarifFacturation>): Promise<TarifFacturation> {
+  const { data, error } = await supabase
+    .from('tarifs_facturation')
+    .upsert(tarif, { onConflict: 'entreprise_id,chantier_id' })
+    .select()
+    .single()
+  if (error) handleError(error, 'upsertTarif')
+  return data as TarifFacturation
+}
+
+export async function getReleves(chantierId: string): Promise<ReleveFacturation[]> {
+  const { data, error } = await supabase
+    .from('releves_facturation')
+    .select('*')
+    .eq('chantier_id', chantierId)
+    .order('mois', { ascending: true })
+  if (error) handleError(error, 'getReleves')
+  return (data ?? []) as ReleveFacturation[]
+}
+
+/** Clôture d'un mois : fige le relevé et verrouille les effectifs */
+export async function cloturerReleve(releve: Omit<ReleveFacturation, 'id' | 'cloture_at'>): Promise<ReleveFacturation> {
+  const { data, error } = await supabase
+    .from('releves_facturation')
+    .insert(releve)
+    .select()
+    .single()
+  if (error) handleError(error, 'cloturerReleve')
+  return data as ReleveFacturation
+}
+
+/** Réouverture : supprime le relevé, les effectifs redeviennent modifiables */
+export async function rouvrirReleve(id: string): Promise<void> {
+  const { error } = await supabase.from('releves_facturation').delete().eq('id', id)
+  if (error) handleError(error, 'rouvrirReleve')
 }
 
 // ── WEEKLY PLANS ────────────────────────────────────────────

@@ -80,6 +80,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Administration',
     items: [
       { to: '/admin', icon: <ShieldCheck size={18} />, label: 'Gestion des accès', roles: ['admin'] },
+      { to: '/admin/facturation', icon: <ClipboardList size={18} />, label: 'Facturation', roles: ['admin'] },
     ]
   }
 ]

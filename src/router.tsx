@@ -59,6 +59,7 @@ import ParamZones from '@/modules/parametres/ParamZones'
 
 // Module Admin
 import AdminPanel from '@/modules/admin/AdminPanel'
+import Facturation from '@/modules/admin/Facturation'
 
 export const router = createBrowserRouter([
   {
@@ -125,6 +126,7 @@ export const router = createBrowserRouter([
 
       // ── Admin ────────────────────────────────────────────
       { path: 'admin', element: guard(['admin'], <AdminPanel />) },
+      { path: 'admin/facturation', element: guard(['admin'], <Facturation />) },
 
       // ── Route QR direct (depuis scan physique) ──────────
       { path: 'zone/:qrCode', element: <PlanViewer /> },

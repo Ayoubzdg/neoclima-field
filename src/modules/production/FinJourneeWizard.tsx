@@ -24,6 +24,8 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
   const [presents, setPresents] = useState(1)
   const [prevus, setPrevus] = useState(1)
   const [heuresJour, setHeuresJour] = useState(8)
+  // Présents déjà validés par le chef de chantier → lecture seule
+  const [valides, setValides] = useState(false)
 
   // Zones où l'équipe a des tâches → proposées pour ventiler les heures
   const zonesEquipe = useMemo(() => {
@@ -47,6 +49,7 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
         setPrevus(eff.monteurs_prevus)
         setPresents(eff.monteurs_presents)
         setHeuresJour(eff.heures_jour ?? 8)
+        setValides(!!eff.valide_at)
       } else {
         // Pas d'effectif existant : défaut = 1 présent, 1 prévu
         setPrevus(1)
@@ -64,6 +67,7 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
     }
     // Personne présent → rien à ventiler
     const suivante: WizardStep = presents > 0 ? 'heures' : 'qtys'
+    if (valides) { setStep(suivante); return } // déjà validé : rien à réécrire
     try {
       await upsertEffectif({
         chantier_id: chantier.id,
@@ -127,7 +131,8 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
             <div className="flex items-center justify-center gap-6 py-4">
               <button
                 onClick={() => setPresents(p => Math.max(0, p - 1))}
-                className="w-12 h-12 rounded-2xl bg-gray-100 hover:bg-gray-200 text-2xl font-bold
+                disabled={valides}
+                className="disabled:opacity-30 w-12 h-12 rounded-2xl bg-gray-100 hover:bg-gray-200 text-2xl font-bold
                            flex items-center justify-center active:scale-90 touch-manipulation"
               >
                 −
@@ -138,12 +143,19 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
               </div>
               <button
                 onClick={() => setPresents(p => p + 1)}
-                className="w-12 h-12 rounded-2xl bg-gray-100 hover:bg-gray-200 text-2xl font-bold
+                disabled={valides}
+                className="disabled:opacity-30 w-12 h-12 rounded-2xl bg-gray-100 hover:bg-gray-200 text-2xl font-bold
                            flex items-center justify-center active:scale-90 touch-manipulation"
               >
                 +
               </button>
             </div>
+
+            {valides && (
+              <p className="text-xs text-center text-green-600">
+                Présents déjà validés par le chef de chantier — pour corriger, s'adresser à lui.
+              </p>
+            )}
 
             <button
               onClick={handleSavePresents}
