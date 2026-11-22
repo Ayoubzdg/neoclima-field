@@ -8,9 +8,39 @@
 // Déploiement : Edge Functions → Deploy new function
 //   nom : rapport-ia (minuscules) · Verify JWT : OFF
 // Secrets requis :
+//   JWT_SECRET         = le "JWT Secret" du projet (même valeur
+//                        que pour la fonction login). Sans lui,
+//                        la fonction refuse tout appel.
 //   ANTHROPIC_API_KEY  = ta clé console.anthropic.com
 //   ANTHROPIC_MODEL    = (optionnel) défaut claude-sonnet-4-5
 // ═══════════════════════════════════════════════════════════
+
+import { verify } from 'https://deno.land/x/djwt@v3.0.2/mod.ts'
+
+/** Rôles autorisés à générer une synthèse (= ceux qui voient les rapports) */
+const ROLES_AUTORISES = ['chef', 'ca', 'admin']
+
+/**
+ * Vérifie le JWT de session émis par la fonction login.
+ * La clé anon seule (publique) est refusée : elle ne porte pas
+ * de app_role. Empêche n'importe qui de consommer la clé Anthropic.
+ */
+async function roleSession(req: Request): Promise<string | null> {
+  const secret = Deno.env.get('JWT_SECRET')
+  if (!secret) throw new Error('Secret JWT_SECRET non configuré')
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!token) return null
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']
+    )
+    const claims = await verify(token, key) as { app_role?: string }
+    return claims.app_role ?? null
+  } catch {
+    return null // signature invalide ou jeton expiré
+  }
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -22,6 +52,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
+    const role = await roleSession(req)
+    if (!role || !ROLES_AUTORISES.includes(role)) {
+      return new Response(JSON.stringify({ error: 'Session expirée ou non autorisée — reconnecte-toi' }),
+        { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } })
+    }
+
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'Secret ANTHROPIC_API_KEY manquant' }),

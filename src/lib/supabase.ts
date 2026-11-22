@@ -72,6 +72,30 @@ function handleError(error: unknown, context: string): never {
   throw new Error(`[Supabase ${context}] ${msg}`)
 }
 
+/**
+ * Récupère TOUTES les lignes d'une requête, par pages de 1000.
+ * PostgREST plafonne chaque réponse à 1000 lignes : sans cette
+ * boucle, un gros chantier (> 1000 tâches) serait tronqué en
+ * silence et les dashboards seraient faux sans message d'erreur.
+ * `build` doit recréer la requête à chaque appel, avec un tri
+ * stable (terminer par .order('id')).
+ */
+const PAGE_SIZE = 1000
+async function fetchAll<T>(
+  build: () => { range: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }> },
+  context: string
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await build().range(from, from + PAGE_SIZE - 1)
+    if (error) handleError(error, context)
+    const page = (data ?? []) as T[]
+    rows.push(...page)
+    if (page.length < PAGE_SIZE) break
+  }
+  return rows
+}
+
 // ── AUTH / SESSION ──────────────────────────────────────────
 
 export async function loginWithPin(codePin: string, chantierId: string): Promise<Utilisateur | null> {
@@ -278,13 +302,12 @@ export async function getAllCyclesByChantier(chantierId: string): Promise<CycleT
   if (zoneIds.length === 0) return []
 
   // Étape 3 : tous les cycles de ces zones (toutes semaines)
-  const { data, error } = await supabase
+  return fetchAll<CycleTakt>(() => supabase
     .from('cycles_takt')
     .select('*, zone_takt:zones_takt(*)')
     .in('zone_takt_id', zoneIds)
     .order('semaine', { ascending: true })
-  if (error) handleError(error, 'getAllCyclesByChantier')
-  return (data ?? []) as CycleTakt[]
+    .order('id'), 'getAllCyclesByChantier')
 }
 
 export async function upsertCycle(cycle: Partial<CycleTakt>): Promise<CycleTakt> {
@@ -394,18 +417,19 @@ export async function getTasksByChantier(chantierId: string, filters?: {
   // UNE seule requête avec jointure !inner filtrée sur le chantier.
   // (Avant : 3 requêtes en cascade secteurs → zones → tasks,
   //  exécutées toutes les 60 s par chaque client connecté.)
-  let query = supabase
-    .from('tasks')
-    .select('*, equipe:equipes(*), zone_takt:zones_takt!inner(*, secteur:secteurs!inner(*))')
-    .eq('zone_takt.secteur.chantier_id', chantierId)
+  // Paginée (fetchAll) : aucun plafond à 1000 tâches.
+  return fetchAll<Task>(() => {
+    let query = supabase
+      .from('tasks')
+      .select('*, equipe:equipes(*), zone_takt:zones_takt!inner(*, secteur:secteurs!inner(*))')
+      .eq('zone_takt.secteur.chantier_id', chantierId)
 
-  if (filters?.semaine) query = query.eq('date_planifiee', filters.semaine)
-  if (filters?.equipeId) query = query.eq('equipe_id', filters.equipeId)
-  if (filters?.status)   query = query.eq('status', filters.status)
+    if (filters?.semaine) query = query.eq('date_planifiee', filters.semaine)
+    if (filters?.equipeId) query = query.eq('equipe_id', filters.equipeId)
+    if (filters?.status)   query = query.eq('status', filters.status)
 
-  const { data, error } = await query.order('date_planifiee', { ascending: true })
-  if (error) handleError(error, 'getTasksByChantier')
-  return (data ?? []) as Task[]
+    return query.order('date_planifiee', { ascending: true }).order('id')
+  }, 'getTasksByChantier')
 }
 
 export async function getTaskById(id: string): Promise<Task | null> {
@@ -863,13 +887,12 @@ export async function deleteUtilisateur(id: string): Promise<void> {
 
 /** Tous les effectifs du chantier (heures consommées cumulées) */
 export async function getEffectifsAll(chantierId: string): Promise<Effectif[]> {
-  const { data, error } = await supabase
+  return fetchAll<Effectif>(() => supabase
     .from('effectifs')
     .select('*')
     .eq('chantier_id', chantierId)
     .order('date', { ascending: true })
-  if (error) handleError(error, 'getEffectifsAll')
-  return (data ?? []) as Effectif[]
+    .order('id'), 'getEffectifsAll')
 }
 
 // ── RAPPORTS DE RÉGIE ───────────────────────────────────────

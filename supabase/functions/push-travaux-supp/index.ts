@@ -22,6 +22,18 @@ import webpush from 'npm:web-push@3.6.7'
 
 Deno.serve(async (req) => {
   try {
+    // Secret partagé avec le Database Webhook (en-tête x-webhook-secret).
+    // Tant que WEBHOOK_SECRET n'est pas défini, la fonction reste
+    // ouverte (transition) et le signale dans les logs.
+    const webhookSecret = Deno.env.get('WEBHOOK_SECRET')
+    if (webhookSecret) {
+      if (req.headers.get('x-webhook-secret') !== webhookSecret) {
+        return new Response(JSON.stringify({ error: 'Non autorisé' }), { status: 401 })
+      }
+    } else {
+      console.warn('[push-ts] WEBHOOK_SECRET non défini : fonction appelable par n\'importe qui')
+    }
+
     const payload = await req.json()
     const record = payload.record
     const old = payload.old_record

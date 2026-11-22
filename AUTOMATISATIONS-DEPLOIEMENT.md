@@ -41,20 +41,22 @@ Le script : active pg_cron + pg_net, crée la colonne d'escalade, la table
 `rapports_jour_auto`, l'agrégateur `donnees_rapport_jour`, et planifie
 les 2 tâches. La vérification finale doit montrer 2 jobs `active = true`.
 
-⚠️ **Heures en UTC** : `0 15 * * 1-5` = 17h suisse en été. En hiver,
-mets `0 16 * * 1-5` (SQL Editor : `SELECT cron.unschedule('rapport-auto-17h');`
-puis re-planifie avec la nouvelle heure).
+**Heure du rapport** : le job appelle la fonction à 15h et 16h UTC ; elle ne
+génère que lors de l'appel qui tombe à 17h heure suisse. Rien à changer
+entre été et hiver. Si le job a été créé avec l'ancien horaire (`0 15`),
+exécute une fois `supabase/cron-rapport-17h-suisse.sql`.
 
 ## 4. Tester sans attendre 17h
 
 PowerShell :
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri "https://sseqiogfaekvylwkzfvy.supabase.co/functions/v1/rapport-auto" -Headers @{ "x-cron-secret" = "TON_SECRET" } -ContentType "application/json" -Body "{}"
+Invoke-RestMethod -Method Post -Uri "https://sseqiogfaekvylwkzfvy.supabase.co/functions/v1/rapport-auto" -Headers @{ "x-cron-secret" = "TON_SECRET" } -ContentType "application/json" -Body '{"force":true}'
 ```
 
 → réponse `{"generes":1}` + notification sur ton téléphone + la synthèse
-apparaît dans Reporting → Rapport du jour. Relancer ne crée pas de
+apparaît dans Reporting → Rapport du jour. Sans `force`, la fonction
+ne génère qu'à 17h heure suisse. Relancer ne crée pas de
 doublon (déjà généré = ignoré).
 
 Même chose avec `/escalade-blocages` (réponse `{"escalades":0}` si aucun

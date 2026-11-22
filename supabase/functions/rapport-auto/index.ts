@@ -24,11 +24,26 @@ function todaySuisse(): string {
   }).format(new Date()) // fr-CA → format YYYY-MM-DD
 }
 
+/** Heure courante (0-23) en heure suisse */
+function heureSuisse(): number {
+  return Number(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Zurich', hour: '2-digit', hourCycle: 'h23',
+  }).format(new Date()))
+}
+
 Deno.serve(async (req) => {
   try {
     const secret = Deno.env.get('CRON_SECRET')
     if (secret && req.headers.get('x-cron-secret') !== secret) {
       return new Response(JSON.stringify({ error: 'Non autorisé' }), { status: 401 })
+    }
+
+    // pg_cron tourne en UTC et ignore l'heure d'été : il appelle
+    // la fonction à 15h ET 16h UTC, et seul l'appel qui tombe à
+    // 17h suisse génère le rapport. Test manuel : body {"force":true}.
+    const corps = await req.json().catch(() => ({})) as { force?: boolean }
+    if (!corps.force && heureSuisse() !== 17) {
+      return new Response(JSON.stringify({ skipped: 'hors créneau 17h suisse' }), { status: 200 })
     }
 
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY')

@@ -83,7 +83,10 @@ export const useProductionStore = create<ProductionState>((set, get) => ({
   },
 
   loadAllTasks: async (chantierId: string, date?: string) => {
-    set({ isLoading: true, error: null })
+    // Squelette de chargement uniquement au premier affichage :
+    // les rafraîchissements de fond (60 s, retour sur l'app) ne
+    // doivent pas faire clignoter l'écran.
+    set({ isLoading: get().allTasks.length === 0, error: null })
     try {
       const tasks = await getTasksByChantier(chantierId, date ? { semaine: date } : undefined)
       set({ allTasks: tasks, isLoading: false })

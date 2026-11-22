@@ -97,13 +97,14 @@ SELECT cron.schedule(
   $$
 );
 
--- Rapport du jour : 15h00 UTC = 17h00 heure suisse (été).
--- En hiver (UTC+1), passe à '0 16 * * 1-5' pour rester à 17h locale.
+-- Rapport du jour : appel à 15h ET 16h UTC ; la fonction rapport-auto
+-- ne génère que lors de l'appel qui tombe à 17h heure suisse.
+-- → 17h locale été comme hiver, sans intervention.
 SELECT cron.unschedule('rapport-auto-17h')
 WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'rapport-auto-17h');
 SELECT cron.schedule(
   'rapport-auto-17h',
-  '0 15 * * 1-5',
+  '0 15,16 * * 1-5',
   $$
   SELECT net.http_post(
     url     := 'https://sseqiogfaekvylwkzfvy.supabase.co/functions/v1/rapport-auto',
