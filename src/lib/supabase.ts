@@ -3,7 +3,7 @@ import type {
   Chantier, Secteur, ZoneTakt, CycleTakt, Task, TaskPhase,
   Contrainte, NonConformite, Mesure, Photo, TaskHistory,
   Effectif, Equipe, Utilisateur, WeeklyPlan, TaskType,
-  PlanVersion, Materiau, VueAvancementZone,
+  PlanVersion, Materiau, VueAvancementZone, HeureZone, HeureZoneLigne,
   Entreprise, Personne, AccesChantier, LoginPersonneResult, TravauxSupp, RapportRegie
 } from '@/types/models'
 
@@ -821,11 +821,60 @@ export async function getEffectifs(chantierId: string, date: string): Promise<Ef
 export async function upsertEffectif(effectif: Partial<Effectif>): Promise<Effectif> {
   const { data, error } = await supabase
     .from('effectifs')
-    .upsert(effectif)
+    // Clé métier : sans onConflict, corriger les effectifs d'un jour
+    // déjà déclaré échouait (doublon) au lieu de mettre à jour
+    .upsert(effectif, { onConflict: 'chantier_id,equipe_id,date' })
     .select()
     .single()
   if (error) handleError(error, 'upsertEffectif')
   return data as Effectif
+}
+
+// ── HEURES PAR ZONE ─────────────────────────────────────────
+
+/** Ventilation des heures d'une équipe pour un jour */
+export async function getHeuresZone(equipeId: string, date: string): Promise<HeureZone[]> {
+  const { data, error } = await supabase
+    .from('heures_zone')
+    .select('*')
+    .eq('equipe_id', equipeId)
+    .eq('date', date)
+  if (error) handleError(error, 'getHeuresZone')
+  return (data ?? []) as HeureZone[]
+}
+
+/** Toutes les heures ventilées du chantier (dashboards) */
+export async function getHeuresZoneAll(chantierId: string): Promise<HeureZone[]> {
+  return fetchAll<HeureZone>(() => supabase
+    .from('heures_zone')
+    .select('*')
+    .eq('chantier_id', chantierId)
+    .order('date', { ascending: true })
+    .order('id'), 'getHeuresZoneAll')
+}
+
+/** Arguments du RPC — même forme en ligne et dans la file hors ligne */
+export function argsHeuresZone(
+  chantierId: string, equipeId: string, date: string,
+  lignes: HeureZoneLigne[], saisiPar: string | null
+) {
+  return {
+    p_chantier_id: chantierId,
+    p_equipe_id: equipeId,
+    p_date: date,
+    p_lignes: lignes.filter(l => l.heures > 0),
+    p_saisi_par: saisiPar,
+  }
+}
+
+/** Remplace (atomique) la ventilation du jour de l'équipe */
+export async function enregistrerHeuresZone(
+  chantierId: string, equipeId: string, date: string,
+  lignes: HeureZoneLigne[], saisiPar: string | null
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    'enregistrer_heures_zone', argsHeuresZone(chantierId, equipeId, date, lignes, saisiPar))
+  if (error) handleError(error, 'enregistrerHeuresZone')
 }
 
 // ── WEEKLY PLANS ────────────────────────────────────────────

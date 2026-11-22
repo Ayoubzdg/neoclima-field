@@ -426,6 +426,32 @@ export interface Effectif {
   equipe?: Equipe
 }
 
+// ── Heures ventilées par zone ───────────────────────────────
+
+export type HeureCategorie = 'productif' | 'attente' | 'regie' | 'reprise'
+
+/** Heures d'une équipe, un jour donné, affectées à une zone et une catégorie */
+export interface HeureZone {
+  id: string
+  chantier_id: string
+  equipe_id: string
+  entreprise_id: string | null
+  /** null = heures non productives sans zone précise */
+  zone_takt_id: string | null
+  date: string
+  categorie: HeureCategorie
+  heures: number
+  saisi_par: string | null
+  created_at: string
+}
+
+/** Ligne envoyée à l'enregistrement (RPC enregistrer_heures_zone) */
+export interface HeureZoneLigne {
+  zone_takt_id: string | null
+  categorie: HeureCategorie
+  heures: number
+}
+
 // ── Weekly Plan ─────────────────────────────────────────────
 
 export interface WeeklyPlan {

@@ -7,8 +7,9 @@ export interface LocalSyncItem {
   localId?: number
   id: string
   table_name: string
-  /** 'increment' = delta de quantité rejoué via RPC atomique */
-  operation: 'insert' | 'update' | 'delete' | 'increment'
+  /** 'increment' = delta de quantité rejoué via RPC atomique
+   *  'rpc' = appel RPC rejouable (table_name = nom de la fonction, payload = arguments) */
+  operation: 'insert' | 'update' | 'delete' | 'increment' | 'rpc'
   record_id: string | null
   payload: Record<string, unknown>
   synced: boolean

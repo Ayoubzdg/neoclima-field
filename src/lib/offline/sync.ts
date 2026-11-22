@@ -57,6 +57,10 @@ export async function syncOfflineQueue(): Promise<SyncResult> {
             p_delta: (item.payload as { delta: number }).delta,
           })
           success = !error
+        } else if (item.operation === 'rpc') {
+          // RPC rejouable (ex : ventilation des heures saisie hors ligne)
+          const { error } = await supabase.rpc(item.table_name, item.payload)
+          success = !error
         } else if (item.operation === 'delete' && item.record_id) {
           const { error } = await supabase
             .from(item.table_name)

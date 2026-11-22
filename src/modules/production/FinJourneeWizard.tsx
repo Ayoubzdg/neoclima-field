@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X, CheckCircle, ChevronRight, Users, Moon } from 'lucide-react'
-import type { Task, Equipe, Utilisateur } from '@/types/models'
+import type { Task, Equipe, Utilisateur, ZoneTakt } from '@/types/models'
 import { upsertEffectif, getEffectifs } from '@/lib/supabase'
 import { todayISO } from '@/utils/dates'
 import { useAuthStore } from '@/store/authStore'
+import VentilationHeures from '@/modules/equipes/VentilationHeures'
 
 interface Props {
   tasks: Task[]
@@ -13,7 +14,7 @@ interface Props {
   onQtyUpdate: (taskId: string, qte: number) => Promise<void>
 }
 
-type WizardStep = 'presents' | 'qtys' | 'done'
+type WizardStep = 'presents' | 'heures' | 'qtys' | 'done'
 
 export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }: Props) {
   const { chantier } = useAuthStore()
@@ -22,6 +23,14 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
   const [step, setStep] = useState<WizardStep>('presents')
   const [presents, setPresents] = useState(1)
   const [prevus, setPrevus] = useState(1)
+  const [heuresJour, setHeuresJour] = useState(8)
+
+  // Zones où l'équipe a des tâches → proposées pour ventiler les heures
+  const zonesEquipe = useMemo(() => {
+    const map = new Map<string, ZoneTakt>()
+    tasks.forEach(t => { if (t.zone_takt) map.set(t.zone_takt.id, t.zone_takt) })
+    return [...map.values()]
+  }, [tasks])
   const [qtys, setQtys] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {}
     tasks.forEach(t => { map[t.id] = t.qte_realisee })
@@ -37,6 +46,7 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
       if (eff) {
         setPrevus(eff.monteurs_prevus)
         setPresents(eff.monteurs_presents)
+        setHeuresJour(eff.heures_jour ?? 8)
       } else {
         // Pas d'effectif existant : défaut = 1 présent, 1 prévu
         setPrevus(1)
@@ -52,6 +62,8 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
       setStep('qtys')
       return
     }
+    // Personne présent → rien à ventiler
+    const suivante: WizardStep = presents > 0 ? 'heures' : 'qtys'
     try {
       await upsertEffectif({
         chantier_id: chantier.id,
@@ -63,7 +75,7 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
     } catch {
       // Silencieux — pas bloquant
     }
-    setStep('qtys')
+    setStep(suivante)
   }
 
   const handleSaveQtys = async () => {
@@ -93,7 +105,7 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
             <Moon size={20} className="text-nc-blue" />
             <h3 className="font-bold text-nc-blue">Clôture de journée</h3>
             <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
-              {step === 'presents' ? '1/2' : step === 'qtys' ? '2/2' : '✓'}
+              {step === 'presents' ? '1/3' : step === 'heures' ? '2/3' : step === 'qtys' ? '3/3' : '✓'}
             </span>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100">
@@ -143,7 +155,29 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
           </div>
         )}
 
-        {/* Étape 2 — Quantités */}
+        {/* Étape 2 — Heures par zone */}
+        {step === 'heures' && chantier?.id && equipe?.id && (
+          <div className="p-5 space-y-4">
+            <div>
+              <p className="font-semibold text-nc-blue">Où sont passées les heures ?</p>
+              <p className="text-sm text-gray-500">
+                {presents} présent{presents > 1 ? 's' : ''} × {heuresJour} h — répartis par zone.
+              </p>
+            </div>
+            <VentilationHeures
+              chantierId={chantier.id}
+              equipeId={equipe.id}
+              date={today}
+              totalHeures={presents * heuresJour}
+              zonesSuggerees={zonesEquipe}
+              labelBouton="Suivant"
+              onSaved={() => setStep('qtys')}
+              onSkip={() => setStep('qtys')}
+            />
+          </div>
+        )}
+
+        {/* Étape 3 — Quantités */}
         {step === 'qtys' && (
           <div className="p-5 space-y-4">
             <p className="font-semibold text-nc-blue">Confirmer les quantités réalisées</p>
@@ -209,7 +243,7 @@ export default function FinJourneeWizard({ tasks, equipe, onClose, onQtyUpdate }
           </div>
         )}
 
-        {/* Étape 3 — Confirmation */}
+        {/* Confirmation */}
         {step === 'done' && (
           <div className="p-8 text-center space-y-4">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">

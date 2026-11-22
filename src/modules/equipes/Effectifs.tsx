@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
-import { getEquipes, getEffectifs, upsertEffectif } from '@/lib/supabase'
-import { todayISO, formatDateFR } from '@/utils/dates'
-import type { Equipe, Effectif } from '@/types/models'
-import { Save, ChevronLeft, ChevronRight } from 'lucide-react'
+import { getEquipes, getEffectifs, upsertEffectif, getTasksByChantier } from '@/lib/supabase'
+import { todayISO, formatDateFR, getMonday, formatDateISO } from '@/utils/dates'
+import type { Equipe, Effectif, ZoneTakt } from '@/types/models'
+import { Save, ChevronLeft, ChevronRight, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import VentilationHeures from './VentilationHeures'
 
 export default function Effectifs() {
   const { chantier, role, entrepriseId } = useAuthStore()
@@ -13,6 +14,25 @@ export default function Effectifs() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [localEffectifs, setLocalEffectifs] = useState<Record<string, { prevus: number; presents: number; heures: number }>>({})
+  // Équipe dont la ventilation des heures est dépliée
+  const [ventilationOuverte, setVentilationOuverte] = useState<string | null>(null)
+  // Zones où chaque équipe a des tâches cette semaine (suggestions)
+  const [zonesParEquipe, setZonesParEquipe] = useState<Record<string, ZoneTakt[]>>({})
+
+  const semaine = formatDateISO(getMonday(new Date(date)))
+  useEffect(() => {
+    if (!chantier?.id) return
+    getTasksByChantier(chantier.id, { semaine })
+      .then(tasks => {
+        const map: Record<string, Map<string, ZoneTakt>> = {}
+        tasks.forEach(t => {
+          if (!t.equipe_id || !t.zone_takt) return
+          ;(map[t.equipe_id] ??= new Map()).set(t.zone_takt.id, t.zone_takt)
+        })
+        setZonesParEquipe(Object.fromEntries(Object.entries(map).map(([k, v]) => [k, [...v.values()]])))
+      })
+      .catch(() => setZonesParEquipe({}))
+  }, [chantier?.id, semaine])
 
   useEffect(() => {
     if (!chantier?.id) return
@@ -129,6 +149,40 @@ export default function Effectifs() {
                   </div>
                 </div>
               </div>
+
+              {/* Ventilation des heures par zone */}
+              {(() => {
+                const loc = localEffectifs[equipe.id]
+                const total = (loc?.presents ?? 0) * (loc?.heures ?? 8)
+                const ouvert = ventilationOuverte === equipe.id
+                if (total <= 0) return null
+                return (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <button
+                      onClick={() => setVentilationOuverte(ouvert ? null : equipe.id)}
+                      className="w-full flex items-center justify-between text-sm font-medium text-nc-blue touch-manipulation"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Clock size={15} /> Répartir les {total} h par zone
+                      </span>
+                      {ouvert ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                    {ouvert && chantier?.id && (
+                      <div className="mt-3">
+                        <VentilationHeures
+                          chantierId={chantier.id}
+                          equipeId={equipe.id}
+                          date={date}
+                          totalHeures={total}
+                          zonesSuggerees={zonesParEquipe[equipe.id] ?? []}
+                          labelBouton="Enregistrer la répartition"
+                          onSaved={() => setVentilationOuverte(null)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           ))}
         </div>
